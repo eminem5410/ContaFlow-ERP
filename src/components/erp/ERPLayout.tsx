@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutDashboard,
@@ -35,6 +36,7 @@ import { useAppStore, type ViewType } from '@/lib/store'
 import { getPlan } from '@/lib/plan-config'
 import { useTranslation } from '@/i18n'
 import { LanguageSwitcher } from '@/components/ui/language-switcher'
+import { OnboardingWizard } from './OnboardingWizard'
 
 const navItems: { icon: typeof LayoutDashboard; labelKey: string; view: ViewType }[] = [
   { icon: LayoutDashboard, labelKey: 'nav.dashboard', view: 'dashboard' },
@@ -220,6 +222,16 @@ const viewTitleKeys: Record<ViewType, string> = {
 }
 
 export function ERPLayout({ children }: { children: React.ReactNode }) {
+  const [showOnboarding, setShowOnboarding] = useState(false)
+
+  useEffect(function () {
+    if (typeof window !== 'undefined') {
+      const onboarded = localStorage.getItem('erp_onboarded')
+      if (!onboarded) {
+        setShowOnboarding(true)
+      }
+    }
+  }, [])
   const currentView = useAppStore((s) => s.currentView)
   const setMobileSidebarOpen = useAppStore((s) => s.setMobileSidebarOpen)
   const company = useAppStore((s) => s.company)
@@ -231,7 +243,9 @@ export function ERPLayout({ children }: { children: React.ReactNode }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
   return (
-    <div className="min-h-screen flex bg-slate-50">
+    <>
+      {showOnboarding && <OnboardingWizard onComplete={function () { setShowOnboarding(false) }} />}
+      <div className="min-h-screen flex bg-slate-50">
       {/* Desktop Sidebar */}
       <aside className={`hidden lg:flex lg:shrink-0 lg:flex-col lg:fixed lg:inset-y-0 transition-all duration-300 ${sidebarCollapsed ? 'lg:w-[70px]' : 'lg:w-64'}`}>
         <SidebarContent collapsed={sidebarCollapsed} />
@@ -304,5 +318,6 @@ export function ERPLayout({ children }: { children: React.ReactNode }) {
         </main>
       </div>
     </div>
+    </>
   )
 }

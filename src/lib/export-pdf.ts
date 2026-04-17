@@ -795,6 +795,128 @@ function addIVASummary(doc: jsPDF, totals: IVATotals, totalLabel: string): void 
   doc.text(fmt(totals.total), col2X + 140, y, { align: 'right' })
 }
 
+
+// -- Cheques -- 
+
+interface ChequeExportEntry {
+  number: string
+  bank: string
+  branch: string | null
+  chequeType: string
+  issuerName: string | null
+  issuerCuit: string | null
+  amount: number
+  currency: string
+  issueDate: string
+  paymentDate: string | null
+  depositDate: string | null
+  clearanceDate: string | null
+  status: string
+  notes: string | null
+}
+
+const chequeStatusLabelsPDF: Record<string, string> = {
+  en_cartera: 'En Cartera',
+  depositado: 'Depositado',
+  cobrado: 'Cobrado',
+  rechazado: 'Rechazado',
+  endosado: 'Endosado',
+  anulado: 'Anulado',
+  emitido: 'Emitido',
+}
+
+const chequeTypeLabelsPDF: Record<string, string> = {
+  propio: 'Propio',
+  tercero: 'Tercero',
+}
+
+export function exportChequesToPDF(cheques: ChequeExportEntry[]): void {
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' })
+  addHeader(doc, 'Reporte de Cheques', 'Total: ' + cheques.length + ' cheques')
+
+  const totalAmount = cheques.reduce(function (s, c) { return s + c.amount; }, 0)
+
+  const body: RowInput[] = []
+
+  for (const c of cheques) {
+    body.push([
+      c.number,
+      c.bank,
+      chequeTypeLabelsPDF[c.chequeType] || c.chequeType,
+      c.issuerName || '-',
+      c.issuerCuit || '-',
+      fmt(c.amount),
+      formatDateEs(c.issueDate),
+      c.paymentDate ? formatDateEs(c.paymentDate) : '-',
+      chequeStatusLabelsPDF[c.status] || c.status,
+    ] as CellInput[])
+  }
+
+  if (body.length === 0) {
+    body.push([
+      { content: 'No hay cheques para mostrar', styles: { fontStyle: 'italic', halign: 'center' } },
+      '', '', '', '', '', '', '', '',
+    ] as CellInput[])
+  }
+
+  body.push([
+    { content: 'TOTAL', styles: { fontStyle: 'bold', halign: 'right' } },
+    '', '', '', '',
+    { content: fmt(totalAmount), styles: { fontStyle: 'bold', halign: 'right' } },
+    '', '', '',
+  ] as CellInput[])
+
+  const totalIdx = body.length - 1
+
+  autoTable(doc, {
+    ...makeTableOptions(),
+    head: [['Nro', 'Banco', 'Tipo', 'Emisor', 'CUIT', 'Monto', 'Emision', 'Vto.', 'Estado']] as RowInput[],
+    body,
+    columnStyles: {
+      0: { cellWidth: 55 },
+      1: { cellWidth: 80 },
+      2: { cellWidth: 45 },
+      3: { cellWidth: 75 },
+      4: { cellWidth: 65 },
+      5: { cellWidth: 65, halign: 'right' },
+      6: { cellWidth: 60 },
+      7: { cellWidth: 60 },
+      8: { cellWidth: 60 },
+    },
+    didParseCell: function (hookData: CellHookData) {
+      if (hookData.row.index === totalIdx) {
+        hookData.cell.styles.fillColor = [...C.headerBg]
+        hookData.cell.styles.fontStyle = 'bold'
+      }
+      if (hookData.column.index === 8 && hookData.row.index < totalIdx) {
+        const val = String(hookData.cell.raw)
+        if (val === 'Cobrado') {
+          hookData.cell.styles.textColor = [...C.green]
+          hookData.cell.styles.fontStyle = 'bold'
+        } else if (val === 'Rechazado') {
+          hookData.cell.styles.textColor = [...C.red]
+          hookData.cell.styles.fontStyle = 'bold'
+        } else if (val === 'En Cartera') {
+          hookData.cell.styles.textColor = [...C.accent]
+          hookData.cell.styles.fontStyle = 'bold'
+        }
+      }
+    },
+    didDrawCell: function (hookData: CellHookData) {
+      if (hookData.row.index === totalIdx) {
+        const cellInfo = hookData.cell
+        doc.setDrawColor(...C.primary)
+        doc.setLineWidth(0.8)
+        doc.line(cellInfo.x, cellInfo.y, cellInfo.x + cellInfo.width, cellInfo.y)
+      }
+    },
+  })
+
+  addFooter(doc)
+  doc.save('cheques.pdf')
+}
+
+
 // ── Registro de Auditoria ──────────────────────────────────────────────
 
 function formatDateTimeEs(dateStr: string): string {

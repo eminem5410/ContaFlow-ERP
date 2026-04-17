@@ -19,6 +19,7 @@ import {
   Banknote,
   Eye,
   X,
+  FileDown,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -59,6 +60,8 @@ import {
 } from '@/components/ui/sheet'
 import { useAppStore } from '@/lib/store'
 import { api } from '@/lib/api'
+import { exportChequesToExcel } from '@/lib/export-excel'
+import { exportChequesToPDF } from '@/lib/export-pdf'
 import { usePermission } from '@/hooks/use-permission'
 import { formatCurrency, formatDate } from '@/lib/formatters'
 
@@ -559,6 +562,18 @@ export function ChequesView() {
               <Plus className="mr-2 h-4 w-4" />
               Nuevo Cheque
             </Button>
+          )}
+          {!isLoading && cheques.length > 0 && (
+            <>
+              <Button variant="outline" size="sm" onClick={() => exportChequesToExcel(cheques)}>
+                <FileDown className="mr-2 h-4 w-4" />
+                Excel
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => exportChequesToPDF(cheques)}>
+                <FileDown className="mr-2 h-4 w-4" />
+                PDF
+              </Button>
+            </>
           )}
         </div>
       </div>

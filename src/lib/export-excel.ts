@@ -434,6 +434,72 @@ export function exportProvidersToExcel(
   )
 }
 
+
+
+// ---------------------------------------------------------------------------
+// Cheques  ->  "Cheques"
+// ---------------------------------------------------------------------------
+
+const chequeStatusLabels: Record<string, string> = {
+  en_cartera: 'En Cartera',
+  depositado: 'Depositado',
+  cobrado: 'Cobrado',
+  rechazado: 'Rechazado',
+  endosado: 'Endosado',
+  anulado: 'Anulado',
+  emitido: 'Emitido',
+}
+
+const chequeTypeLabels: Record<string, string> = {
+  propio: 'Propio',
+  tercero: 'Tercero',
+}
+
+export function exportChequesToExcel(
+  cheques: Array<{
+    number: string
+    bank: string
+    chequeType: string
+    issuerName: string | null
+    amount: number
+    issueDate: string
+    paymentDate: string | null
+    status: string
+    currency: string
+  }>,
+) {
+  const headers = [
+    'Nro Cheque',
+    'Banco',
+    'Tipo',
+    'Emisor',
+    'Monto',
+    'Moneda',
+    'Emision',
+    'Vencimiento',
+    'Estado',
+  ]
+
+  const rows = cheques.map((c) => [
+    c.number,
+    c.bank,
+    chequeTypeLabels[c.chequeType] || c.chequeType,
+    c.issuerName || '',
+    formatCurrencyARS(c.amount),
+    c.currency,
+    formatDateAR(c.issueDate),
+    c.paymentDate ? formatDateAR(c.paymentDate) : '',
+    chequeStatusLabels[c.status] || c.status,
+  ])
+
+  buildAndDownload(
+    'Cheques',
+    headers,
+    rows,
+    'cheques',
+  )
+}
+
 // ---------------------------------------------------------------------------
 // Audit Logs  →  "Registro de Auditoria"
 // ---------------------------------------------------------------------------
