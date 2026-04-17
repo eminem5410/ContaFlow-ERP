@@ -3,7 +3,7 @@
 import { useState, useMemo, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Plus, Pencil, Trash2, Search, X, Receipt, FileDown } from 'lucide-react'
+import { Plus, Pencil, Trash2, Search, X, Receipt, FileDown, ShieldCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -118,6 +118,8 @@ export function InvoicesView() {
   const [showDialog, setShowDialog] = useState(false)
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null)
   const [deletingInvoice, setDeletingInvoice] = useState<Invoice | null>(null)
+  const [authorizingInvoice, setAuthorizingInvoice] = useState<Invoice | null>(null)
+  const [afipResult, setAfipResult] = useState<any>(null)
   const [form, setForm] = useState(emptyForm)
 
   // ── Invoice types & status options (translated) ──────────────────────────
@@ -225,6 +227,19 @@ export function InvoicesView() {
       setDeletingInvoice(null)
     },
     onError: (error: Error) => toast.error(t('common.error'), { description: error.message }),
+  })
+
+  const afipMutation = useMutation({
+    mutationFn: function (invoiceId: string) {
+      return api.post("/api/invoices/" + invoiceId + "/authorize", { companyId: companyId })
+    },
+    onSuccess: function (res: any) {
+      setAfipResult(res)
+      toast.success("CAE obtenido: " + res.authorization.cae)
+    },
+    onError: function (error: Error) {
+      toast.error("Error AFIP", { description: error.message })
+    },
   })
 
   // ── Form helpers ───────────────────────────────────────────────────────────
@@ -487,6 +502,15 @@ export function InvoicesView() {
                       <td className="px-4 py-3 text-center">{statusBadge(invoice.status)}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-center gap-1 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-blue-600 hover:text-blue-800 hover:bg-blue-50"
+                            onClick={function () { setAuthorizingInvoice(invoice); setAfipResult(null) }}
+                            title="Autorizar AFIP"
+                          >
+                            <ShieldCheck className="h-3.5 w-3.5" />
+                          </Button>
                           {canEdit('invoices') && (
                             <Button
                               variant="ghost"
@@ -749,6 +773,79 @@ export function InvoicesView() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* AFIP Authorization Dialog */}
+      <Dialog open={!!authorizingInvoice} onOpenChange={function (open) { if (!open) setAuthorizingInvoice(null) }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5 text-blue-600" />
+              Autorizar Factura AFIP
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {!afipResult ? (
+              <div className="text-center space-y-4 py-6">
+                <p className="text-slate-600">
+                  Factura: <span className="font-mono font-bold">{authorizingInvoice?.number}</span>
+                </p>
+                <p className="text-sm text-slate-500">
+                  Se solicitara un CAE (Codigo de Autorizacion Electronico) a AFIP.
+                </p>
+                <Badge className="bg-amber-100 text-amber-800 border-amber-200">
+                  MODO DEMO - CAE Simulado
+                </Badge>
+                <div>
+                  <Button
+                    className="bg-blue-600 hover:bg-blue-700 text-white"
+                    onClick={function () {
+                      if (authorizingInvoice) afipMutation.mutate(authorizingInvoice.id)
+                    }}
+                    disabled={afipMutation.isPending}
+                  >
+                    {afipMutation.isPending ? "Autorizando..." : "Obtener CAE"}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-4 text-center">
+                  <p className="text-sm text-emerald-600 font-medium mb-1">CAE Generado</p>
+                  <p className="text-2xl font-mono font-bold text-emerald-700">{afipResult.authorization.cae}</p>
+                </div>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Comprobante:</span>
+                    <span className="font-mono text-slate-800">{afipResult.authorization.numeroComprobante}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Vencimiento CAE:</span>
+                    <span className="font-mono text-slate-800">{afipResult.authorization.caeVencimiento}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Resultado:</span>
+                    <Badge className="bg-emerald-100 text-emerald-800">Aprobado</Badge>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Modo:</span>
+                    <Badge className="bg-amber-100 text-amber-800">{afipResult.authorization.modo}</Badge>
+                  </div>
+                </div>
+                <div className="rounded-lg bg-amber-50 border border-amber-200 p-3">
+                  <p className="text-xs text-amber-700">
+                    CAE simulado. Para obtener un CAE real, configure certificado digital AFIP y modo production.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={function () { setAuthorizingInvoice(null); setAfipResult(null) }}>
+              Cerrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
