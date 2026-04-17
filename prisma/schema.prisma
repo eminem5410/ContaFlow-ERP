@@ -1,0 +1,347 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============ TENANT / EMPRESA ============
+model Company {
+  id        String   @id @default(cuid())
+  name      String   @db.VarChar(200)
+  cuit      String?  @unique @db.VarChar(20)
+  email     String?  @db.VarChar(255)
+  phone     String?  @db.VarChar(50)
+  address   String?  @db.VarChar(500)
+  logo      String?  @db.VarChar(500)
+  plan      String   @default("starter") @db.VarChar(50)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users           User[]
+  roles           Role[]
+  accounts        Account[]
+  journalEntries  JournalEntry[]
+  clients         Client[]
+  providers       Provider[]
+  invoices        Invoice[]
+  bankAccounts    BankAccount[]
+  payments        Payment[]
+  cheques         Cheque[]
+  planPayments    PlanPayment[]
+  auditLogs       AuditLog[]
+}
+
+// ============ USUARIOS ============
+model User {
+  id         String   @id @default(cuid())
+  email      String   @unique @db.VarChar(255)
+  password   String   @db.VarChar(500)
+  name       String   @db.VarChar(200)
+  role       String   @default("admin") @db.VarChar(50)
+  roleId     String?
+  companyId  String
+  createdAt  DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company   Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  roleRel   Role?      @relation(fields: [roleId], references: [id])
+  auditLogs AuditLog[]
+}
+
+// ============ PLAN DE CUENTAS ============
+model Account {
+  id        String   @id @default(cuid())
+  code      String   @db.VarChar(20)
+  name      String   @db.VarChar(200)
+  type      String   @db.VarChar(50)
+  subtype   String?  @db.VarChar(50)
+  parentId  String?
+  level     Int      @default(1)
+  balance   Float    @default(0) @db.DoublePrecision
+  companyId String
+
+  company      Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  parent       Account?            @relation("AccountHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children     Account[]           @relation("AccountHierarchy")
+  journalLines JournalEntryLine[]
+
+  @@unique([companyId, code])
+}
+
+// ============ ASIENTOS CONTABLES ============
+model JournalEntry {
+  id          String   @id @default(cuid())
+  number      Int
+  date        DateTime @default(now())
+  description String   @db.VarChar(500)
+  concept     String?  @db.VarChar(500)
+  status      String   @default("borrador") @db.VarChar(50)
+  companyId   String
+  totalDebit  Float    @default(0) @db.DoublePrecision
+  totalCredit Float    @default(0) @db.DoublePrecision
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  lines   JournalEntryLine[]
+}
+
+// ============ LÍNEAS DE ASIENTO (PARTIDA DOBLE) ============
+model JournalEntryLine {
+  id             String        @id @default(cuid())
+  journalEntryId String
+  accountId      String
+  debit          Float         @default(0)
+  credit         Float         @default(0)
+  description    String?
+
+  journalEntry JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  account       Account      @relation(fields: [accountId], references: [id])
+}
+
+// ============ CLIENTES ============
+model Client {
+  id         String   @id @default(cuid())
+  code       String?  @db.VarChar(20)
+  name       String   @db.VarChar(200)
+  cuit       String?  @unique @db.VarChar(20)
+  email      String?  @db.VarChar(255)
+  phone      String?  @db.VarChar(50)
+  address    String?  @db.VarChar(500)
+  city       String?  @db.VarChar(100)
+  province   String?  @db.VarChar(100)
+  notes      String?  @db.Text
+  balance    Float    @default(0) @db.DoublePrecision
+  companyId  String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  company  Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  invoices Invoice[]
+  payments Payment[]
+  cheques  Cheque[]          @relation("ClientCheques")
+}
+
+// ============ PROVEEDORES ============
+model Provider {
+  id         String   @id @default(cuid())
+  code       String?  @db.VarChar(20)
+  name       String   @db.VarChar(200)
+  cuit       String?  @unique @db.VarChar(20)
+  email      String?  @db.VarChar(255)
+  phone      String?  @db.VarChar(50)
+  address    String?  @db.VarChar(500)
+  city       String?  @db.VarChar(100)
+  province   String?  @db.VarChar(100)
+  notes      String?  @db.Text
+  balance    Float    @default(0) @db.DoublePrecision
+  companyId  String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  company  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  payments Payment[]
+  cheques  Cheque[]          @relation("ProviderCheques")
+}
+
+// ============ FACTURAS ============
+model Invoice {
+  id         String    @id @default(cuid())
+  number     String    @db.VarChar(50)
+  type       String    @db.VarChar(10) // A, B, C, NC, ND
+  date       DateTime  @default(now())
+  dueDate    DateTime?
+  total      Float     @default(0) @db.DoublePrecision
+  tax        Float     @default(0) @db.DoublePrecision
+  netTotal   Float     @default(0) @db.DoublePrecision
+  amountPaid Float     @default(0) @db.DoublePrecision
+  status     String    @default("pendiente") @db.VarChar(50) // pendiente, pagada_parcial, pagada, vencida, anulada
+  notes      String?   @db.Text
+  clientId   String?
+  companyId  String
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  company  Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  client   Client?       @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  items    InvoiceItem[]
+  payments Payment[]
+}
+
+// ============ ÍTEMS DE FACTURA ============
+model InvoiceItem {
+  id          String  @id @default(cuid())
+  description String  @db.VarChar(500)
+  quantity    Float   @default(1) @db.DoublePrecision
+  unitPrice   Float   @default(0) @db.DoublePrecision
+  subtotal    Float   @default(0) @db.DoublePrecision
+  taxRate     Float   @default(21) @db.DoublePrecision
+  taxAmount   Float   @default(0) @db.DoublePrecision
+  invoiceId   String
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+}
+
+// ============ PAGOS / COBROS ============
+model Payment {
+  id            String    @id @default(cuid())
+  number        String    @db.VarChar(50)
+  date          DateTime  @default(now())
+  amount        Float     @db.DoublePrecision
+  method        String    @default("transferencia") @db.VarChar(50) // efectivo, transferencia, cheque, tarjeta
+  reference     String?   @db.VarChar(100)
+  type          String    @default("cobro") @db.VarChar(20) // cobro, pago
+  notes         String?   @db.Text
+  invoiceId     String?
+  clientId      String?
+  providerId    String?
+  bankAccountId String?
+  companyId     String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  company     Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  invoice     Invoice?     @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  client      Client?      @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  provider    Provider?    @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  bankAccount BankAccount? @relation(fields: [bankAccountId], references: [id], onDelete: SetNull)
+}
+
+// ============ CUENTAS BANCARIAS ============
+model BankAccount {
+  id        String   @id @default(cuid())
+  name      String   @db.VarChar(200)
+  bank      String?  @db.VarChar(100)
+  number    String?  @db.VarChar(50)
+  type      String   @default("cta_corriente") @db.VarChar(50)
+  balance   Float    @default(0) @db.DoublePrecision
+  currency  String   @default("ARS") @db.VarChar(10)
+  companyId String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company  Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  payments Payment[]
+  cheques  Cheque[]          @relation("BankAccountCheques")
+}
+
+// ============ CHEQUES ============
+model Cheque {
+  id              String    @id @default(cuid())
+  number          String    @db.VarChar(50)
+  bank            String    @db.VarChar(100)
+  branch          String?   @db.VarChar(100)
+  accountType     String    @default("cta_corriente") @db.VarChar(50)
+  chequeType      String    @default("tercero") @db.VarChar(20) // propio, tercero
+  status          String    @default("en_cartera") @db.VarChar(30) // emitido, en_cartera, depositado, cobrado, rechazado, endosado, anulado
+  amount          Float     @db.DoublePrecision
+  currency        String    @default("ARS") @db.VarChar(10)
+  issueDate       DateTime  @default(now())
+  paymentDate     DateTime?
+  depositDate     DateTime?
+  clearanceDate   DateTime?
+  rejectionReason String?   @db.Text
+  endorsee        String?   @db.VarChar(200)
+  notes           String?   @db.Text
+  issuerName      String?   @db.VarChar(200)
+  issuerCuit      String?   @db.VarChar(20)
+  companyId       String
+  clientId        String?
+  providerId      String?
+  bankAccountId   String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  company     Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  client      Client?      @relation("ClientCheques", fields: [clientId], references: [id], onDelete: SetNull)
+  provider    Provider?    @relation("ProviderCheques", fields: [providerId], references: [id], onDelete: SetNull)
+  bankAccount BankAccount? @relation("BankAccountCheques", fields: [bankAccountId], references: [id], onDelete: SetNull)
+
+  @@index([companyId])
+  @@index([status])
+  @@index([chequeType])
+  @@index([paymentDate])
+}
+
+// ============ AUDITORÍA ============
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String
+  userName   String   @db.VarChar(200)
+  action     String   @db.VarChar(50) // create, update, delete, login, confirm
+  entity     String   @db.VarChar(50) // journal_entry, invoice, payment, account, client, provider, cheque
+  entityId   String?
+  details    String?  @db.Text
+  companyId  String
+  createdAt  DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([entity])
+  @@index([createdAt])
+}
+
+// ============ ROLES ============
+model Role {
+  id          String   @id @default(cuid())
+  name        String   @db.VarChar(50)
+  description String?  @db.VarChar(200)
+  isDefault   Boolean  @default(false)
+  level       Int      @default(0) // higher = more permissions
+  companyId   String
+  createdAt   DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company     Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  permissions RolePermission[]
+  users       User[]
+
+  @@unique([companyId, name])
+}
+
+// ============ PERMISOS ============
+model Permission {
+  id          String @id @default(cuid())
+  module      String @db.VarChar(50)   // accounts, journal-entries, clients, providers, invoices, payments, bank-accounts, cheques, reports, users, roles, settings, audit-log
+  action      String @db.VarChar(50)   // view, create, edit, delete, confirm, export
+  description String @db.VarChar(200)
+
+  roles RolePermission[]
+
+  @@unique([module, action])
+}
+
+// ============ ROLES-PERMISOS (pivot) ============
+model RolePermission {
+  id           String @id @default(cuid())
+  roleId       String
+  permissionId String
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+}
+
+// ============ PAGOS DE PLAN (MercadoPago) ============
+model PlanPayment {
+  id                  String    @id @default(cuid())
+  companyId           String
+  plan                String    @db.VarChar(50)
+  amount              Float     @db.DoublePrecision
+  currency            String    @default("ARS") @db.VarChar(10)
+  status              String    @default("pending") @db.VarChar(20)
+  mercadopagoPrefId   String?   @db.VarChar(100)
+  mercadopagoPaymentId String?  @db.VarChar(100)
+  externalReference   String?   @db.VarChar(200)
+  approvalDate        DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}

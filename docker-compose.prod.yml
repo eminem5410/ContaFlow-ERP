@@ -1,0 +1,279 @@
+
+# ── ContaFlow ERP — Production Docker Compose ────────────────────────────
+# Usage: docker compose -f docker-compose.prod.yml up -d
+#
+# Prerequisites:
+#   1. Copy .env.production to .env and customize ALL values
+#   2. Run deploy.sh (installs deps, gets SSL, starts everything)
+#
+# Environment override: ASPNETCORE_ENVIRONMENT=Production
+
+services:
+  # ── PostgreSQL 16 ──────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: contaflow-postgres
+    restart: always
+    env_file: .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./download/migrations/001_initial_create.sql:/docker-entrypoint-initdb.d/01-initial-create.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+    networks:
+      - contaflow-net
+
+  # ── .NET 8 Backend API ────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: ContaFlow.API/Dockerfile
+    container_name: contaflow-backend
+    restart: always
+    env_file: .env
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__DefaultConnection: ${DATABASE_URL}
+      ConnectionStrings__Redis: redis://${REDIS_HOST:-redis}:${REDIS_PORT:-6379},abortConnect=false
+      Jwt__Key: ${JWT_KEY}
+      Jwt__Issuer: ${JWT_ISSUER}
+      Jwt__Audience: ${JWT_AUDIENCE}
+      Jwt__ExpiresInMinutes: ${JWT_EXPIRES_MINUTES}
+      Kafka__Enabled: ${KAFKA_ENABLED}
+      Kafka__BootstrapServers: ${KAFKA_BOOTSTRAP_SERVERS}
+      Email__Enabled: ${EMAIL_ENABLED}
+      Email__SmtpHost: ${EMAIL_SMTP_HOST}
+      Email__SmtpPort: ${EMAIL_SMTP_PORT}
+      Email__SmtpUser: ${EMAIL_SMTP_USER}
+      Email__SmtpPassword: ${EMAIL_SMTP_PASSWORD}
+      Email__FromName: ${EMAIL_FROM_NAME}
+      Email__FromEmail: ${EMAIL_FROM_EMAIL}
+      Email__UseSsl: ${EMAIL_USE_SSL}
+      Cors__AllowedOrigins: ${CORS_ALLOWED_ORIGINS}
+      AutoMigrate: "true"
+    expose:
+      - "8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      kafka:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health/ready || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+    networks:
+      - contaflow-net
+
+  # ── Next.js Frontend App ──────────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: contaflow-app
+    restart: always
+    env_file: .env
+    environment:
+      BACKEND_URL: http://backend:8080
+      DATABASE_URL_PRISMA: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      NODE_ENV: production
+    expose:
+      - "3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+    networks:
+      - contaflow-net
+
+  # ── Nginx Reverse Proxy + SSL ──────────────────────────────────────────
+  nginx:
+    image: nginx:alpine
+    container_name: contaflow-nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./deploy/ssl/certbot/conf:/etc/letsencrypt:ro
+      - ./deploy/ssl/certbot/www:/var/www/certbot:ro
+      - ./deploy/ssl/nginx/ssl:/etc/nginx/ssl:ro
+      - ./deploy/nginx/logs:/var/log/nginx
+    depends_on:
+      - app
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost/health/live || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: "0.5"
+    networks:
+      - contaflow-net
+
+  # ── Certbot (SSL Certificate Renewal) ──────────────────────────────────
+  certbot:
+    image: certbot/certbot
+    container_name: contaflow-certbot
+    volumes:
+      - ./deploy/ssl/certbot/conf:/etc/letsencrypt
+      - ./deploy/ssl/certbot/www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+    networks:
+      - contaflow-net
+
+  # ── Kafka + Zookeeper ─────────────────────────────────────────────────
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: contaflow-zookeeper
+    restart: always
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    # No ports exposed to host in production
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+    networks:
+      - contaflow-net
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: contaflow-kafka
+    restart: always
+    depends_on:
+      - zookeeper
+    # No ports exposed to host in production
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_RETENTION_HOURS: 168
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+          cpus: "1.0"
+    networks:
+      - contaflow-net
+
+  # ── Redis Cache ─────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: contaflow-redis
+    restart: always
+    # No ports exposed to host in production
+    volumes:
+      - redis_data:/data
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --requirepass ${REDIS_PASSWORD:-}
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+          cpus: "0.5"
+    networks:
+      - contaflow-net
+
+  # ── Mailpit — SMTP Testing (dev/staging only) ─────────────────────────
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: contaflow-mailpit
+    restart: always
+    profiles:
+      - dev
+    # No ports exposed to host in production (accessible via nginx /mailpit/)
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+    networks:
+      - contaflow-net
+
+  # ── PostgreSQL Backup Scheduler ────────────────────────────────────────
+  pg-backup:
+    image: postgres:16-alpine
+    container_name: contaflow-pg-backup
+    restart: always
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      BACKUP_DIR: /backups
+      BACKUP_RETENTION_DAYS: "30"
+      BACKUP_SCHEDULE: "0 3 * * *"  # Daily at 3 AM
+    volumes:
+      - ./deploy/backups:/backups
+      - ./deploy/scripts/backup-entrypoint.sh:/backup-entrypoint.sh:ro
+    entrypoint: ["/bin/sh", "/backup-entrypoint.sh"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+          cpus: "0.1"
+    networks:
+      - contaflow-net
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  contaflow-net:
+    driver: bridge

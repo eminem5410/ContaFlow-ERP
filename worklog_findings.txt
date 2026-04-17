@@ -1,0 +1,34 @@
+STATIC ANALYSIS REPORT — ContaFlow .NET Backend
+================================================
+
+CRITICAL COMPILE ERRORS (2 found):
+
+1. CS0103 — Application layer illegally references Infrastructure
+   File: ContaFlow.Application/Events/EventDispatcher.cs line 2
+   Issue: `using ContaFlow.Infrastructure.Messaging;` — references `IKafkaProducer` from
+   Infrastructure, but ContaFlow.Application.csproj has NO project reference to Infrastructure.
+   Impact: PROJECT WILL NOT COMPILE. Violates Clean Architecture dependency rule.
+   Fix: Move `IKafkaProducer` interface to `ContaFlow.Domain/Interfaces/` (or create an
+   abstraction in the Application layer), then inject via DI.
+
+2. CS0535 — SmtpEmailService does not fully implement IEmailService
+   File: ContaFlow.Infrastructure/Services/SmtpEmailService.cs
+   Interface defines 5 methods:
+   - SendAsync ✓ implemented
+   - SendInvoiceCreatedAsync ❌ MISSING (has SendInvoiceNotificationAsync instead)
+   - SendInvoicePaidAsync ❌ MISSING
+   - SendPaymentReceivedAsync ✓ implemented
+   - SendWelcomeEmailAsync ✓ implemented
+   Impact: PROJECT WILL NOT COMPILE.
+   Fix: Rename SendInvoiceNotificationAsync to SendInvoiceCreatedAsync (adjust param:
+   string type instead of string status), add SendInvoicePaidAsync implementation.
+
+WARNINGS (2 found):
+
+3. Deprecated NuGet: Microsoft.AspNetCore.Cors v2.2.0 in ContaFlow.API.csproj (unnecessary in .NET 8)
+4. Unused using: ContaFlow.Application.Interfaces in Models/EmailSettings.cs
+
+VERIFIED CLEAN: .csproj targets, project references, DI registrations, controllers,
+AppDbContext DbSets, entity navigation properties, Kafka extensions, Redis extensions,
+Dockerfile, RBAC authorization, middleware, event handlers — all correct.
+No TODO/FIXME/HACK comments found.

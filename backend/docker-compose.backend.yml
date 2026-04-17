@@ -1,0 +1,135 @@
+
+services:
+  # ── PostgreSQL 16 (base de datos principal) ──────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: contaflow-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: contaflow
+      POSTGRES_PASSWORD: contaflow_secret_2024
+      POSTGRES_DB: contaflow_erp
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U contaflow -d contaflow_erp"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - contaflow-network
+
+  # ── Redis (caché y sesiones) ─────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: contaflow-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - contaflow-network
+
+  # ── Zookeeper (requerido por Kafka) ─────────────────────────────
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.0
+    container_name: contaflow-zookeeper
+    restart: unless-stopped
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+    networks:
+      - contaflow-network
+
+  # ── Kafka (event bus para integraciones) ─────────────────────────
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: contaflow-kafka
+    restart: unless-stopped
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "9093:9093"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      # Topics predefinidos
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_LOG_RETENTION_BYTES: 1073741824
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - contaflow-network
+
+  # ── ContaFlow API (.NET 8) ───────────────────────────────────────
+  api:
+    build:
+      context: ./ContaFlow.API
+      dockerfile: Dockerfile
+    container_name: contaflow-api
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:5000
+      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=contaflow_erp;Username=contaflow;Password=contaflow_secret_2024"
+      ConnectionStrings__Redis: "redis:6379"
+      Jwt__Key: "contaflow_production_secret_key_at_least_32_characters!!"
+      Jwt__Issuer: "ContaFlow.API"
+      Jwt__Audience: "ContaFlow.Client"
+      Jwt__ExpiresInMinutes: "480"
+      Cors__AllowedOrigins: "http://localhost:3000"
+      HealthChecks__Kafka: "http://kafka:8083/health"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5000/health/ready || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - contaflow-network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  zookeeper_data:
+    driver: local
+  kafka_data:
+    driver: local
+
+networks:
+  contaflow-network:
+    driver: bridge

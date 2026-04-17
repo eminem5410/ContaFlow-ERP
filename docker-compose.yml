@@ -1,0 +1,182 @@
+# ── Environment defaults (override with .env file) ──────────────
+# Copy .env.example to .env and customize your values.
+
+services:
+  # ── PostgreSQL 16 ──────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: contaflow-postgres
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./download/migrations/001_initial_create.sql:/docker-entrypoint-initdb.d/01-initial-create.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - contaflow-net
+
+  # ── .NET 8 Backend API ───────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: ContaFlow.API/Dockerfile
+    container_name: contaflow-backend
+    restart: unless-stopped
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    env_file: .env
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT}
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__DefaultConnection: ${DATABASE_URL}
+      ConnectionStrings__Redis: ${REDIS_HOST}:${REDIS_PORT},abortConnect=false
+      Jwt__Key: ${JWT_KEY}
+      Jwt__Issuer: ${JWT_ISSUER}
+      Jwt__Audience: ${JWT_AUDIENCE}
+      Jwt__ExpiresInMinutes: ${JWT_EXPIRES_MINUTES}
+      Kafka__Enabled: ${KAFKA_ENABLED}
+      Kafka__BootstrapServers: ${KAFKA_BOOTSTRAP_SERVERS}
+      Email__Enabled: ${EMAIL_ENABLED}
+      Email__SmtpHost: ${EMAIL_SMTP_HOST}
+      Email__SmtpPort: ${EMAIL_SMTP_PORT}
+      Email__SmtpUser: ${EMAIL_SMTP_USER}
+      Email__SmtpPassword: ${EMAIL_SMTP_PASSWORD}
+      Email__FromName: ${EMAIL_FROM_NAME}
+      Email__FromEmail: ${EMAIL_FROM_EMAIL}
+      Email__UseSsl: ${EMAIL_USE_SSL}
+      Cors__AllowedOrigins: ${CORS_ALLOWED_ORIGINS}
+      AutoMigrate: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      kafka:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health/live || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - contaflow-net
+
+  # ── Next.js Frontend App ─────────────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: contaflow-app
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    env_file: .env
+    environment:
+      BACKEND_URL: http://backend:8080
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      MP_ACCESS_TOKEN: ${MP_ACCESS_TOKEN}
+      NODE_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    networks:
+      - contaflow-net
+
+  # ── Kafka + Zookeeper ──────────────────────────────────────────────────────
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: contaflow-zookeeper
+    restart: unless-stopped
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    networks:
+      - contaflow-net
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: contaflow-kafka
+    restart: unless-stopped
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "9093:9093"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:9092 --list || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    networks:
+      - contaflow-net
+
+  # ── Redis Cache ─────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: contaflow-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - contaflow-net
+
+  # ── Mailpit — SMTP testing server (dev) ────────────────────────────────────
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: contaflow-mailpit
+    restart: unless-stopped
+    ports:
+      - "${MAILPIT_SMTP_PORT:-1025}:1025"   # SMTP
+      - "${MAILPIT_WEB_PORT:-8025}:8025"     # Web UI
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8025/api/v1/info || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - contaflow-net
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  contaflow-net:
+    driver: bridge

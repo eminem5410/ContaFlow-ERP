@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #FFFFFF;
+    font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'SimHei', sans-serif;
+    display: flex; justify-content: center; padding: 48px;
+  }
+  #diagram { width: fit-content; min-width: 1000px; }
+  .chart-title {
+    font-size: 22px; font-weight: 700; color: #1E293B;
+    text-align: center; margin-bottom: 8px;
+  }
+  .chart-subtitle {
+    font-size: 13px; color: #64748B; text-align: center; margin-bottom: 32px;
+  }
+</style>
+</head>
+<body>
+<div id="diagram">
+  <div class="chart-title">Modelo de Datos — ERP Contable Multi-Tenant</div>
+  <div class="chart-subtitle">PostgreSQL Schema con aislamiento por tenant_id</div>
+  <pre class="mermaid">
+erDiagram
+    TENANTS {
+        uuid id PK
+        string name
+        string cuit
+        string plan
+        boolean active
+        timestamp created_at
+    }
+
+    USERS {
+        uuid id PK
+        uuid tenant_id FK
+        string email
+        string password_hash
+        string role
+        boolean active
+        timestamp created_at
+    }
+
+    ACCOUNTS {
+        uuid id PK
+        uuid tenant_id FK
+        string code
+        string name
+        string type
+        string subtype
+        boolean imputable
+        boolean active
+        timestamp created_at
+    }
+
+    JOURNAL_ENTRIES {
+        uuid id PK
+        uuid tenant_id FK
+        string number
+        date date
+        string description
+        string status
+        uuid created_by FK
+        timestamp created_at
+    }
+
+    JOURNAL_LINES {
+        uuid id PK
+        uuid entry_id FK
+        uuid account_id FK
+        decimal debit
+        decimal credit
+        string description
+    }
+
+    INVOICES {
+        uuid id PK
+        uuid tenant_id FK
+        string type
+        string number
+        uuid customer_id FK
+        date date
+        date due_date
+        decimal total
+        string status
+        string afip_result
+        timestamp created_at
+    }
+
+    INVOICE_ITEMS {
+        uuid id PK
+        uuid invoice_id FK
+        string description
+        decimal quantity
+        decimal unit_price
+        decimal subtotal
+        decimal vat_rate
+    }
+
+    CUSTOMERS {
+        uuid id PK
+        uuid tenant_id FK
+        string name
+        string cuit_dni
+        string email
+        string phone
+        string address
+        timestamp created_at
+    }
+
+    SUPPLIERS {
+        uuid id PK
+        uuid tenant_id FK
+        string name
+        string cuit
+        string email
+        string phone
+        string address
+        timestamp created_at
+    }
+
+    PAYMENTS {
+        uuid id PK
+        uuid tenant_id FK
+        uuid customer_id FK
+        decimal amount
+        date date
+        string method
+        string reference
+        string status
+        timestamp created_at
+    }
+
+    BANK_ACCOUNTS {
+        uuid id PK
+        uuid tenant_id FK
+        string name
+        string bank_name
+        string account_number
+        string currency
+        decimal balance
+    }
+
+    BANK_MOVEMENTS {
+        uuid id PK
+        uuid bank_account_id FK
+        uuid tenant_id FK
+        date date
+        decimal amount
+        string type
+        string description
+        boolean reconciled
+    }
+
+    TAX_CONFIGURATIONS {
+        uuid id PK
+        uuid tenant_id FK
+        string tax_type
+        decimal rate
+        string category
+        boolean active
+    }
+
+    AUDIT_LOGS {
+        uuid id PK
+        uuid tenant_id FK
+        uuid user_id FK
+        string entity_type
+        uuid entity_id
+        string action
+        jsonb old_values
+        jsonb new_values
+        timestamp created_at
+    }
+
+    TENANTS ||--o{ USERS : "tiene"
+    TENANTS ||--o{ ACCOUNTS : "tiene"
+    TENANTS ||--o{ JOURNAL_ENTRIES : "tiene"
+    TENANTS ||--o{ INVOICES : "tiene"
+    TENANTS ||--o{ CUSTOMERS : "tiene"
+    TENANTS ||--o{ SUPPLIERS : "tiene"
+    TENANTS ||--o{ PAYMENTS : "tiene"
+    TENANTS ||--o{ BANK_ACCOUNTS : "tiene"
+    TENANTS ||--o{ TAX_CONFIGURATIONS : "tiene"
+    TENANTS ||--o{ AUDIT_LOGS : "tiene"
+
+    USERS ||--o{ JOURNAL_ENTRIES : "crea"
+
+    ACCOUNTS ||--o{ JOURNAL_LINES : "usa"
+
+    JOURNAL_ENTRIES ||--|{ JOURNAL_LINES : "contiene"
+    JOURNAL_LINES }o--|| ACCOUNTS : "impacta"
+
+    INVOICES ||--|{ INVOICE_ITEMS : "contiene"
+    INVOICES }o--|| CUSTOMERS : "pertenece a"
+
+    PAYMENTS }o--|| CUSTOMERS : "de"
+    PAYMENTS }o--o| INVOICES : "paga"
+
+    BANK_ACCOUNTS ||--o{ BANK_MOVEMENTS : "registra"
+    BANK_ACCOUNTS }o--|| TENANTS : "pertenece a"
+  </pre>
+</div>
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      primaryColor: '#EFF6FF',
+      primaryBorderColor: '#3B82F6',
+      primaryTextColor: '#1E293B',
+      lineColor: '#94A3B8',
+      secondaryColor: '#F0FDF4',
+      secondaryBorderColor: '#10B981',
+      secondaryTextColor: '#1E293B',
+      tertiaryColor: '#FFF7ED',
+      tertiaryBorderColor: '#F59E0B',
+      tertiaryTextColor: '#1E293B',
+      noteBkgColor: '#F8FAFC',
+      noteTextColor: '#6B7280',
+      noteBorderColor: '#E2E8F0',
+      fontSize: '13px',
+      fontFamily: '-apple-system, BlinkMacSystemFont, PingFang SC, SimHei, sans-serif',
+    },
+    er: {
+      useMaxWidth: false,
+    },
+    flowchart: {
+      padding: 32,
+      nodeSpacing: 80,
+      rankSpacing: 80,
+      htmlLabels: true,
+      wrappingWidth: 160,
+    },
+  });
+</script>
+</body>
+</html>

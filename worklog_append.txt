@@ -1,0 +1,29 @@
+
+---
+Task ID: test-verify-1
+Agent: Subagent (Test Static Analysis)
+Task: Verify .NET test projects via static analysis — compile-readiness check
+
+Work Log:
+- Read both test .csproj files: Domain.Tests (xunit, FluentAssertions, coverlet) and Application.Tests (xunit, NSubstitute, FluentAssertions, coverlet) — project references correct
+- Verified ContaFlow.sln includes both test projects with Debug/Release build configs
+- Read and analyzed all 9 test files (3 Domain + 6 Application)
+
+Issues Found and Fixed:
+1. CRITICAL: User.cs duplicate property name — string Role and Role navigation in same class
+   - Fixed: Renamed navigation property to UserRole in User.cs
+   - Fixed: Updated AppDbContext.cs HasOne FK configuration
+2. CRITICAL: Application.csproj missing NuGet packages (IConfiguration, ILogger, JWT)
+   - Fixed: Added Microsoft.Extensions.Configuration.Abstractions 8.0.0, Logging.Abstractions 8.0.2, IdentityModel.Tokens 8.2.1, System.IdentityModel.Tokens.Jwt 8.2.1
+3. CRITICAL: Application.Tests.csproj missing NuGet packages (ConfigurationBuilder, ILogger, JWT)
+   - Fixed: Added Microsoft.Extensions.Configuration 8.0.0, Logging 8.0.1, System.IdentityModel.Tokens.Jwt 8.2.1
+4-7. COMPILATION ERRORS: 4 service test files had constructor mismatches (missing IEventDispatcher + ILogger after Task 3-e refactoring)
+   - Fixed: AuthServiceTests, InvoiceServiceTests, PaymentServiceTests, JournalEntryServiceTests
+
+Files Modified (8 total): User.cs, AppDbContext.cs, Application.csproj, Application.Tests.csproj, AuthServiceTests.cs, InvoiceServiceTests.cs, PaymentServiceTests.cs, JournalEntryServiceTests.cs
+
+Static Analysis Summary (post-fix):
+- Domain.Tests: 3 classes, 22 tests — all valid
+- Application.Tests: 6 classes, 30 tests — all valid
+- Total: 52 tests across 9 test classes
+- Both test projects registered in ContaFlow.sln with correct GUIDs and build configs

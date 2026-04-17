@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #FFFFFF;
+    font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'SimHei', system-ui, sans-serif;
+    display: flex; justify-content: center; padding: 48px;
+  }
+  #root { width: fit-content; min-width: 900px; }
+
+  .chart-title {
+    font-size: 22px; font-weight: 700; color: #1E293B;
+    text-align: center; margin-bottom: 8px;
+  }
+  .chart-subtitle {
+    font-size: 13px; color: #64748B; text-align: center; margin-bottom: 40px;
+  }
+
+  /* Phase groups */
+  .phase-group {
+    background: #F8FAFC; border-radius: 12px; padding: 20px 24px;
+    margin-bottom: 20px; position: relative;
+  }
+  .phase-title {
+    font-size: 15px; font-weight: 700; padding: 10px 16px;
+    border-radius: 8px; margin-bottom: 16px; display: flex; align-items: center; gap: 10px;
+  }
+  .phase-num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; border-radius: 50%; font-size: 13px; font-weight: 700;
+  }
+  .phase-steps { display: flex; flex-direction: column; gap: 8px; padding-left: 12px; }
+  .phase-step {
+    font-size: 13px; font-weight: 400; color: #1E293B;
+    padding: 10px 14px; background: white; border-radius: 8px;
+    border: 1px solid #E2E8F0; display: flex; align-items: center; gap: 10px;
+  }
+  .step-icon { font-size: 16px; flex-shrink: 0; }
+  .step-text { flex: 1; }
+  .step-detail { font-size: 11px; color: #64748B; }
+
+  /* Event flow boxes */
+  .event-box {
+    background: #F5F3FF; border: 1.5px dashed #8B5CF6;
+    border-radius: 8px; padding: 8px 14px; margin: 8px 0 8px 12px;
+    font-size: 12px; color: #5B21B6; font-weight: 500;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .event-arrow {
+    text-align: center; color: #94A3B8; font-size: 18px; padding: 2px 0;
+  }
+
+  /* Formula box */
+  .formula-box {
+    background: linear-gradient(135deg, #1E293B, #334155);
+    border-radius: 10px; padding: 16px 24px; margin: 20px 0;
+    text-align: center; color: white;
+  }
+  .formula-label { font-size: 11px; color: #94A3B8; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+  .formula { font-size: 20px; font-weight: 700; letter-spacing: 2px; }
+
+  /* Phase colors — same-hue blue-gray progression */
+  .phase-1 .phase-title { background: #F0F4F8; color: #334155; border-left: 4px solid #64748B; }
+  .phase-1 .phase-num { background: #E2E8F0; color: #475569; }
+  .phase-2 .phase-title { background: #E8EDF2; color: #1E3A5F; border-left: 4px solid #5B7A99; }
+  .phase-2 .phase-num { background: #DBEAFE; color: #1E3A5F; }
+  .phase-3 .phase-title { background: #E0E7EF; color: #1E3050; border-left: 4px solid #4A6B8A; }
+  .phase-3 .phase-num { background: #D0D9E4; color: #1E3050; }
+  .phase-4 .phase-title { background: #D8E0EA; color: #172540; border-left: 4px solid #3A5C7A; }
+  .phase-4 .phase-num { background: #C7D2E0; color: #172540; }
+
+  /* Decision diamond */
+  .decision-row {
+    display: flex; align-items: center; justify-content: center; gap: 16px;
+    margin: 12px 0;
+  }
+  .decision-box {
+    background: #FFF7ED; border: 2px solid #F59E0B;
+    padding: 10px 20px; border-radius: 8px;
+    font-size: 13px; font-weight: 600; color: #92400E;
+    text-align: center;
+  }
+  .decision-result {
+    padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 600;
+  }
+  .decision-ok { background: #F0FDF4; color: #065F46; border: 1px solid #10B981; }
+  .decision-fail { background: #FEF2F2; color: #991B1B; border: 1px solid #EF4444; }
+</style>
+</head>
+<body>
+<div id="root">
+  <div class="chart-title">Flujo Contable — Partida Doble y Asientos Automaticos</div>
+  <div class="chart-subtitle">Event-Driven: Factura / Pago generan asientos contables automaticamente</div>
+
+  <!-- Ecuacion fundamental -->
+  <div class="formula-box">
+    <div class="formula-label">Ecuacion Patrimonial Fundamental</div>
+    <div class="formula">ACTIVO = PASIVO + PATRIMONIO NETO</div>
+  </div>
+
+  <!-- Fase 1: Crear Asiento Manual -->
+  <div class="phase-group phase-1">
+    <div class="phase-title">
+      <span class="phase-num">1</span>
+      Asiento Contable Manual
+    </div>
+    <div class="phase-steps">
+      <div class="phase-step">
+        <span class="step-icon">&#128221;</span>
+        <span class="step-text">Usuario crea asiento con lineas de debito y credito</span>
+      </div>
+      <div class="phase-step">
+        <span class="step-icon">&#9888;</span>
+        <span class="step-text">AccountingValidator verifica: sum(debit) = sum(credit)</span>
+      </div>
+    </div>
+    <div class="decision-row">
+      <div class="decision-box">Esta balanceado?</div>
+      <div class="decision-result decision-ok">SI &#10003; Persistir</div>
+      <div class="decision-result decision-fail">NO &#10007; Rechazar</div>
+    </div>
+  </div>
+
+  <div class="event-arrow">&#9660;</div>
+
+  <!-- Fase 2: Factura Creada (Evento) -->
+  <div class="phase-group phase-2">
+    <div class="phase-title">
+      <span class="phase-num">2</span>
+      Factura Creada — Evento Dispara Asiento Automatico
+    </div>
+    <div class="phase-steps">
+      <div class="phase-step">
+        <span class="step-icon">&#128196;</span>
+        <span class="step-text">Billing Service emite: <strong>invoice.created</strong></span>
+        <span class="step-detail">Factura A/B/C con items, IVA, subtotal</span>
+      </div>
+      <div class="event-box">
+        <span>&#128260;</span> Evento: invoice.created → Accounting Facade lo consume
+      </div>
+      <div class="phase-step">
+        <span class="step-icon">&#9881;</span>
+        <span class="step-text">Accounting Facade genera asiento automatico</span>
+        <span class="step-detail">Debita: Clientes / Credita: Ventas + IVA</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="event-arrow">&#9660;</div>
+
+  <!-- Fase 3: Pago Recibido (Evento) -->
+  <div class="phase-group phase-3">
+    <div class="phase-title">
+      <span class="phase-num">3</span>
+      Pago Recibido — Evento Actualiza Contabilidad
+    </div>
+    <div class="phase-steps">
+      <div class="phase-step">
+        <span class="step-icon">&#128176;</span>
+        <span class="step-text">Payments Service emite: <strong>payment.received</strong></span>
+        <span class="step-detail">Cobro de cliente por factura</span>
+      </div>
+      <div class="event-box">
+        <span>&#128260;</span> Evento: payment.received → Accounting Facade lo consume
+      </div>
+      <div class="phase-step">
+        <span class="step-icon">&#127974;</span>
+        <span class="step-text">Accounting Facade genera asiento de cobranza</span>
+        <span class="step-detail">Debita: Banco / Credita: Clientes</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="event-arrow">&#9660;</div>
+
+  <!-- Fase 4: Reportes Actualizados -->
+  <div class="phase-group phase-4">
+    <div class="phase-title">
+      <span class="phase-num">4</span>
+      Reportes y Estados Financieros Actualizados en Tiempo Real
+    </div>
+    <div class="phase-steps">
+      <div class="phase-step">
+        <span class="step-icon">&#128202;</span>
+        <span class="step-text">Reporting Service consume eventos contables</span>
+        <span class="step-detail">Balance General / Estado de Resultados / Libro Diario</span>
+      </div>
+      <div class="phase-step">
+        <span class="step-icon">&#129302;</span>
+        <span class="step-text">AI Service analiza patrones y genera alertas</span>
+        <span class="step-detail">"Flujo de caja proyectado negativo en 30 dias"</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Summary -->
+  <div style="margin-top: 24px; padding: 16px 20px; background: #F8FAFC; border-radius: 10px; border: 1px solid #E2E8F0;">
+    <div style="font-size: 13px; font-weight: 600; color: #1E293B; margin-bottom: 8px;">Principio Clave: Event Sourcing</div>
+    <div style="font-size: 12px; color: #64748B; line-height: 1.6;">
+      Todo evento de negocio (factura, pago, compra) genera automaticamente su asiento contable a traves del Accounting Facade. 
+      Esto garantiza integridad financiera: los reportes siempre reflejan el estado real del sistema. 
+      La validacion de partida doble (sum(debit) = sum(credit)) se ejecuta en el backend, nunca en el frontend.
+    </div>
+  </div>
+</div>
+</body>
+</html>

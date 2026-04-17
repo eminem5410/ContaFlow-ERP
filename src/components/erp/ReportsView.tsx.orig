@@ -1,0 +1,1044 @@
+'use client'
+
+import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { Printer, CheckCircle2, XCircle, FileDown } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Separator } from '@/components/ui/separator'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { useAppStore } from '@/lib/store'
+import { api } from '@/lib/api'
+import { usePermission } from '@/hooks/use-permission'
+import { formatCurrency, formatDate, formatCurrencyExact, getAccountTypeColor, getAccountTypeLabel } from '@/lib/formatters'
+import {
+  exportBalanceSheetToPDF,
+  exportIncomeStatementToPDF,
+  exportJournalToPDF,
+  exportLedgerToPDF,
+  exportIVASalesToPDF,
+  exportIVAPurchasesToPDF,
+} from '@/lib/export-pdf'
+
+// ── Report type definitions ──────────────────────────────────────────
+
+interface AccountEntry {
+  code: string
+  name: string
+  balance: number
+}
+
+interface BalanceSheetData {
+  asOf: string
+  activos: AccountEntry[]
+  pasivos: AccountEntry[]
+  patrimonio: AccountEntry[]
+  totalActivo: number
+  totalPasivo: number
+  totalPatrimonio: number
+  totalPasivoPatrimonio: number
+  balanced: boolean
+}
+
+interface IncomeStatementData {
+  ingresos: AccountEntry[]
+  costoVentas: AccountEntry[]
+  egresos: AccountEntry[]
+  totalIngresos: number
+  totalCostoVentas: number
+  totalEgresos: number
+  resultadoNeto: number
+}
+
+interface JournalReportData {
+  journalEntries: Array<{
+    id: string
+    number: number
+    date: string
+    description: string
+    lines: Array<{
+      id: string
+      account: { code: string; name: string }
+      debit: number
+      credit: number
+    }>
+  }>
+  period: { from: string | null; to: string | null }
+  pagination: { page: number; limit: number; total: number; totalPages: number }
+}
+
+interface LedgerData {
+  account: { id: string; code: string; name: string; type: string }
+  period: { from: string | null; to: string | null }
+  lines: Array<{
+    id: string
+    date: string
+    entryNumber: number
+    entryDescription: string
+    debit: number
+    credit: number
+    balance: number
+  }>
+  totalDebit: number
+  totalCredit: number
+  finalBalance: number
+}
+
+interface IVAEntry {
+  date: string
+  number: number
+  description: string
+  client: string | null
+  netAmount: number
+  taxAmount: number
+  taxRate: number
+  total: number
+}
+
+interface IVATotals {
+  gravado21: number
+  iva21: number
+  gravado105: number
+  iva105: number
+  gravado27: number
+  iva27: number
+  exento: number
+  noGravado: number
+  total: number
+}
+
+interface IVAReportData {
+  entries: IVAEntry[]
+  totals: IVATotals
+}
+
+export function ReportsView() {
+  const companyId = useAppStore((s) => s.user?.companyId)
+
+  return (
+    <Tabs defaultValue="balance-sheet" className="space-y-4">
+      <TabsList className="bg-slate-100 flex-wrap h-auto gap-1">
+        <TabsTrigger value="balance-sheet" className="text-sm">Balance General</TabsTrigger>
+        <TabsTrigger value="income-statement" className="text-sm">Estado de Resultados</TabsTrigger>
+        <TabsTrigger value="journal" className="text-sm">Libro Diario</TabsTrigger>
+        <TabsTrigger value="ledger" className="text-sm">Mayor</TabsTrigger>
+        <TabsTrigger value="iva-sales" className="text-sm">Libro IVA Ventas</TabsTrigger>
+        <TabsTrigger value="iva-purchases" className="text-sm">Libro IVA Compras</TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="balance-sheet">
+        <BalanceSheet companyId={companyId!} />
+      </TabsContent>
+      <TabsContent value="income-statement">
+        <IncomeStatement companyId={companyId!} />
+      </TabsContent>
+      <TabsContent value="journal">
+        <JournalReport companyId={companyId!} />
+      </TabsContent>
+      <TabsContent value="ledger">
+        <LedgerReport companyId={companyId!} />
+      </TabsContent>
+      <TabsContent value="iva-sales">
+        <IVASalesReport companyId={companyId!} />
+      </TabsContent>
+      <TabsContent value="iva-purchases">
+        <IVAPurchasesReport companyId={companyId!} />
+      </TabsContent>
+    </Tabs>
+  )
+}
+
+function BalanceSheet({ companyId }: { companyId: string }) {
+  const { canExport } = usePermission()
+  const { data, isLoading } = useQuery<BalanceSheetData>({
+    queryKey: ['balance-sheet', companyId],
+    queryFn: () => api.get('/api/reports/balance-sheet', { companyId }),
+    enabled: !!companyId,
+  })
+
+  const handlePrint = () => window.print()
+  const handleExportPDF = () => exportBalanceSheetToPDF(data)
+
+  if (isLoading) return <ReportSkeleton />
+
+  if (!data) return <p className="text-slate-400">No hay datos disponibles.</p>
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-slate-900">Balance General</h2>
+          <p className="text-sm text-slate-500">Al {data.asOf}</p>
+        </div>
+        {canExport('reports') && (
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={handleExportPDF}>
+              <FileDown className="mr-2 h-4 w-4" />
+              Descargar PDF
+            </Button>
+            <Button variant="outline" size="sm" onClick={handlePrint}>
+              <Printer className="mr-2 h-4 w-4" />
+              Imprimir
+            </Button>
+          </div>
+        )}
+      </div>
+
+      <Card id="balance-sheet-report">
+        <CardContent className="p-0">
+          <div className="grid grid-cols-2 divide-x divide-slate-200">
+            {/* Activos */}
+            <div className="p-4 md:p-6">
+              <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-4 pb-2 border-b border-slate-200">
+                Activos
+              </h3>
+              <div className="space-y-2">
+                {data.activos.map((a) => (
+                  <div key={a.code} className="flex justify-between text-sm py-1">
+                    <span className="text-slate-600">{a.code} - {a.name}</span>
+                    <span className="font-mono text-slate-800 font-medium text-right">{formatCurrencyExact(a.balance)}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-4 pt-3 border-t-2 border-slate-300">
+                <div className="flex justify-between text-base font-bold">
+                  <span>Total Activos</span>
+                  <span className="font-mono">{formatCurrencyExact(data.totalActivo)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Pasivos + Patrimonio */}
+            <div className="p-4 md:p-6">
+              <div className="mb-4">
+                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-2 pb-2 border-b border-slate-200">
+                  Pasivos
+                </h3>
+                <div className="space-y-2">
+                  {data.pasivos.map((a) => (
+                    <div key={a.code} className="flex justify-between text-sm py-1">
+                      <span className="text-slate-600">{a.code} - {a.name}</span>
+                      <span className="font-mono text-slate-800 font-medium text-right">{formatCurrencyExact(a.balance)}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-3 pt-2 border-t border-slate-200">
+                  <div className="flex justify-between text-sm font-bold">
+                    <span>Total Pasivos</span>
+                    <span className="font-mono">{formatCurrencyExact(data.totalPasivo)}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-2 pb-2 border-b border-slate-200">
+                  Patrimonio Neto
+                </h3>
+                <div className="space-y-2">
+                  {data.patrimonio.map((a) => (
+                    <div key={a.code} className="flex justify-between text-sm py-1">
+                      <span className="text-slate-600">{a.code} - {a.name}</span>
+                      <span className="font-mono text-slate-800 font-medium text-right">{formatCurrencyExact(a.balance)}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-3 pt-2 border-t border-slate-200">
+                  <div className="flex justify-between text-sm font-bold">
+                    <span>Total Patrimonio</span>
+                    <span className="font-mono">{formatCurrencyExact(data.totalPatrimonio)}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 pt-3 border-t-2 border-slate-300">
+                <div className="flex justify-between text-base font-bold">
+                  <span>Total Pas. + Patrim.</span>
+                  <span className="font-mono">{formatCurrencyExact(data.totalPasivoPatrimonio)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Verification */}
+          <div className={`p-4 text-center text-sm font-medium border-t-2 ${data.balanced ? 'bg-emerald-50 border-emerald-300 text-emerald-700' : 'bg-red-50 border-red-300 text-red-700'}`}>
+            {data.balanced ? (
+              <><CheckCircle2 className="inline h-4 w-4 mr-1.5" /> Balance verificado: Activos = Pasivos + Patrimonio</>
+            ) : (
+              <><XCircle className="inline h-4 w-4 mr-1.5" /> El balance no cuadra. Revisar los asientos.</>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+function IncomeStatement({ companyId }: { companyId: string }) {
+  const { canExport } = usePermission()
+  const { data, isLoading } = useQuery<IncomeStatementData}({
+    queryKey: ['income-statement', companyId],
+    queryFn: () => api.get('/api/reports/income-statement', { companyId }),
+    enabled: !!companyId,
+  })
+
+  if (isLoading) return <ReportSkeleton />
+
+  if (!data) return <p className="text-slate-400">No hay datos disponibles.</p>
+
+  const costoVentas = data.totalCostoVentas || 0
+  const gastos = data.totalEgresos || 0
+  const resultadoBruto = data.totalIngresos - costoVentas
+  const resultadoNeto = data.resultadoNeto
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-slate-900">Estado de Resultados</h2>
+          <p className="text-sm text-slate-500">Período actual</p>
+        </div>
+        {canExport('reports') && (
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => exportIncomeStatementToPDF(data)}>
+              <FileDown className="mr-2 h-4 w-4" />
+              Descargar PDF
+            </Button>
+          </div>
+        )}
+      </div>
+
+      <Card>
+        <CardContent className="p-6 space-y-4">
+          {/* Ingresos */}
+          <div>
+            <h3 className="text-sm font-bold text-emerald-700 uppercase tracking-wider mb-3 pb-2 border-b border-emerald-200 bg-emerald-50/50 px-3 py-2 rounded">
+              (+) Ingresos
+            </h3>
+            <div className="space-y-1.5 ml-3">
+              {data.ingresos?.map((a) => (
+                <div key={a.code} className="flex justify-between text-sm py-1">
+                  <span className="text-slate-600">{a.code} - {a.name}</span>
+                  <span className="font-mono text-emerald-700 font-medium">{formatCurrencyExact(a.balance)}</span>
+                </div>
+              ))}
+              <div className="flex justify-between text-sm font-bold pt-2 border-t border-slate-200">
+                <span>Total Ingresos</span>
+                <span className="font-mono text-emerald-700">{formatCurrencyExact(data.totalIngresos)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Costo de Ventas */}
+          {costoVentas > 0 && (
+            <div>
+              <h3 className="text-sm font-bold text-red-700 uppercase tracking-wider mb-3 pb-2 border-b border-red-200 bg-red-50/50 px-3 py-2 rounded">
+                (-) Costo de Ventas
+              </h3>
+              <div className="space-y-1.5 ml-3">
+                {data.costoVentas?.map((a) => (
+                  <div key={a.code} className="flex justify-between text-sm py-1">
+                    <span className="text-slate-600">{a.code} - {a.name}</span>
+                    <span className="font-mono text-red-700 font-medium">{formatCurrencyExact(a.balance)}</span>
+                  </div>
+                ))}
+                <div className="flex justify-between text-sm font-bold pt-2 border-t border-slate-200">
+                  <span>Total Costo de Ventas</span>
+                  <span className="font-mono text-red-700">{formatCurrencyExact(costoVentas)}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Resultado Bruto */}
+          <div className={`p-3 rounded-lg border-2 ${resultadoBruto >= 0 ? 'bg-emerald-50 border-emerald-300' : 'bg-red-50 border-red-300'}`}>
+            <div className="flex justify-between text-base font-bold">
+              <span>= Resultado Bruto</span>
+              <span className={`font-mono ${resultadoBruto >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                {formatCurrencyExact(resultadoBruto)}
+              </span>
+            </div>
+          </div>
+
+          {/* Egresos / Gastos */}
+          {gastos > 0 && (
+            <div>
+              <h3 className="text-sm font-bold text-red-700 uppercase tracking-wider mb-3 pb-2 border-b border-red-200 bg-red-50/50 px-3 py-2 rounded">
+                (-) Gastos
+              </h3>
+              <div className="space-y-1.5 ml-3">
+                {data.egresos?.map((a) => (
+                  <div key={a.code} className="flex justify-between text-sm py-1">
+                    <span className="text-slate-600">{a.code} - {a.name}</span>
+                    <span className="font-mono text-red-700 font-medium">{formatCurrencyExact(a.balance)}</span>
+                  </div>
+                ))}
+                <div className="flex justify-between text-sm font-bold pt-2 border-t border-slate-200">
+                  <span>Total Gastos</span>
+                  <span className="font-mono text-red-700">{formatCurrencyExact(gastos)}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <Separator />
+
+          {/* Resultado Neto */}
+          <div className={`p-4 rounded-lg border-2 ${resultadoNeto >= 0 ? 'bg-emerald-100 border-emerald-400' : 'bg-red-100 border-red-400'}`}>
+            <div className="flex justify-between text-xl font-bold">
+              <span>= Resultado Neto</span>
+              <span className={`font-mono ${resultadoNeto >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                {formatCurrencyExact(resultadoNeto)}
+              </span>
+            </div>
+            <p className={`text-sm mt-1 ${resultadoNeto >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+              {resultadoNeto >= 0 ? 'Ganancia del período' : 'Pérdida del período'}
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+function JournalReport({ companyId }: { companyId: string }) {
+  const { canExport } = usePermission()
+  const today = new Date().toISOString().split('T')[0]
+  const firstOfMonth = `${today.split('-')[0]}-${today.split('-')[1]}-01`
+  const [from, setFrom] = useState(firstOfMonth)
+  const [to, setTo] = useState(today)
+
+  const { data, isLoading } = useQuery<JournalReportData>({
+    queryKey: ['journal-report', companyId, from, to],
+    queryFn: () => api.get('/api/reports/journal', { companyId, from: from || undefined, to: to || undefined }),
+    enabled: !!companyId,
+  })
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-lg font-semibold text-slate-900">Libro Diario</h2>
+        <p className="text-sm text-slate-500">Registro detallado de asientos contables</p>
+      </div>
+
+      {/* Date filters */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex flex-col sm:flex-row items-end gap-4">
+            <div className="space-y-2 flex-1">
+              <Label>Desde</Label>
+              <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+            </div>
+            <div className="space-y-2 flex-1">
+              <Label>Hasta</Label>
+              <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+            </div>
+            {canExport('reports') && (
+              <div className="flex items-center gap-2">
+                <Button variant="outline" onClick={() => data && exportJournalToPDF(data, from, to)} disabled={!data}>
+                  <FileDown className="mr-2 h-4 w-4" />
+                  Descargar PDF
+                </Button>
+                <Button variant="outline" onClick={() => window.print()}>
+                  <Printer className="mr-2 h-4 w-4" />
+                  Imprimir
+                </Button>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Journal entries table */}
+      <Card>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[600px]">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50">
+                  <th className="text-left px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider w-24">Fecha</th>
+                  <th className="text-left px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider w-16">#</th>
+                  <th className="text-left px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Cuenta</th>
+                  <th className="text-right px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider w-28">Debe</th>
+                  <th className="text-right px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider w-28">Haber</th>
+                </tr>
+              </thead>
+              <tbody>
+                {isLoading ? (
+                  Array.from({ length: 8 }).map((_, i) => (
+                    <tr key={i} className="border-b border-slate-100">
+                      <td colSpan={5} className="px-4 py-3"><Skeleton className="h-4 w-full" /></td>
+                    </tr>
+                  ))
+                ) : data?.journalEntries?.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="text-center py-12 text-slate-400 text-sm">
+                      No hay asientos en el período seleccionado
+                    </td>
+                  </tr>
+                ) : (
+                  data?.journalEntries?.map((entry) => (
+                    <JournalEntryGroup key={entry.id} entry={entry} />
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+function JournalEntryGroup({ entry }: { entry: JournalReportData['journalEntries'][number] }) {
+  const totalDebit = entry.lines.reduce((s, l) => s + l.debit, 0)
+  const totalCredit = entry.lines.reduce((s, l) => s + l.credit, 0)
+
+  return (
+    <>
+      {/* Entry header row */}
+      <tr className="bg-slate-50 border-b border-slate-200">
+        <td colSpan={5} className="px-4 py-2">
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="text-xs font-mono">#{entry.number}</Badge>
+            <span className="text-xs text-slate-400">{formatDate(entry.date)}</span>
+            <span className="text-sm font-medium text-slate-700">— {entry.description}</span>
+          </div>
+        </td>
+      </tr>
+      {/* Entry lines */}
+      {entry.lines.map((line) => (
+        <tr key={line.id} className="border-b border-slate-50 hover:bg-slate-50">
+          <td />
+          <td />
+          <td className="px-4 py-2 text-sm">
+            <span className="font-mono text-slate-400 text-xs mr-2">{line.account.code}</span>
+            <span className="text-slate-700">{line.account.name}</span>
+          </td>
+          <td className="px-4 py-2 text-sm text-right font-mono text-slate-700">
+            {line.debit > 0 ? formatCurrencyExact(line.debit) : ''}
+          </td>
+          <td className="px-4 py-2 text-sm text-right font-mono text-slate-700">
+            {line.credit > 0 ? formatCurrencyExact(line.credit) : ''}
+          </td>
+        </tr>
+      ))}
+      {/* Entry totals */}
+      <tr className="border-b border-slate-200">
+        <td colSpan={3} className="px-4 py-2 text-right text-xs text-slate-500">Totales</td>
+        <td className="px-4 py-2 text-sm text-right font-mono font-semibold text-slate-800">{formatCurrencyExact(totalDebit)}</td>
+        <td className="px-4 py-2 text-sm text-right font-mono font-semibold text-slate-800">{formatCurrencyExact(totalCredit)}</td>
+      </tr>
+    </>
+  )
+}
+
+function LedgerReport({ companyId }: { companyId: string }) {
+  const { canExport } = usePermission()
+  const today = new Date().toISOString().split('T')[0]
+  const firstOfMonth = `${today.split('-')[0]}-${today.split('-')[1]}-01`
+  const [from, setFrom] = useState(firstOfMonth)
+  const [to, setTo] = useState(today)
+  const [selectedAccountId, setSelectedAccountId] = useState('')
+
+  // Fetch accounts list
+  const { data: accountsData } = useQuery<{ accounts: Array<{ id: string; code: string; name: string; type: string; level?: number }> }>({
+    queryKey: ['accounts-ledger', companyId],
+    queryFn: () => api.get('/api/accounts', { companyId }),
+    enabled: !!companyId,
+  })
+
+  // Only show leaf accounts (level >= 3) for ledger selection
+  const leafAccounts = accountsData?.accounts?.filter((a) => (a.level ?? 0) >= 3).sort((a, b) => a.code.localeCompare(b.code)) || []
+
+  // Fetch ledger data for selected account
+  const { data: ledgerData, isLoading } = useQuery<LedgerData>({
+    queryKey: ['ledger', companyId, selectedAccountId, from, to],
+    queryFn: () => api.get('/api/reports/ledger', { companyId, accountId: selectedAccountId, from: from || undefined, to: to || undefined }),
+    enabled: !!companyId && !!selectedAccountId,
+  })
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-lg font-semibold text-slate-900">Libro Mayor</h2>
+        <p className="text-sm text-slate-500">Movimientos detallados por cuenta contable</p>
+      </div>
+
+      {/* Filters */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex flex-col sm:flex-row items-end gap-4">
+            <div className="space-y-2 flex-1 w-full">
+              <Label>Cuenta</Label>
+              <Select value={selectedAccountId} onValueChange={setSelectedAccountId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar cuenta..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {leafAccounts.map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.code} - {a.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Desde</Label>
+              <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Hasta</Label>
+              <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+            </div>
+            {canExport('reports') && (
+              <div className="flex items-center gap-2">
+                <Button variant="outline" onClick={() => ledgerData && exportLedgerToPDF(ledgerData)} disabled={!selectedAccountId || !ledgerData}>
+                  <FileDown className="mr-2 h-4 w-4" />
+                  Descargar PDF
+                </Button>
+                <Button variant="outline" onClick={() => window.print()} disabled={!selectedAccountId}>
+                  <Printer className="mr-2 h-4 w-4" />
+                  Imprimir
+                </Button>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Ledger table */}
+      {selectedAccountId && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">
+              {ledgerData?.account?.code} - {ledgerData?.account?.name}
+            </CardTitle>
+            <CardDescription>
+              Tipo: <Badge className={`text-[10px] px-2 py-0.5 ${getAccountTypeColor(ledgerData?.account?.type || '')}`}>
+                {getAccountTypeLabel(ledgerData?.account?.type || '')}
+              </Badge>
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[600px]">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50">
+                    <th className="text-left px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider w-24">Fecha</th>
+                    <th className="text-left px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider w-12">#</th>
+                    <th className="text-left px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Concepto</th>
+                    <th className="text-right px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider w-28">Debe</th>
+                    <th className="text-right px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider w-28">Haber</th>
+                    <th className="text-right px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider w-28">Saldo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {isLoading ? (
+                    Array.from({ length: 5 }).map((_, i) => (
+                      <tr key={i} className="border-b border-slate-100">
+                        <td colSpan={6} className="px-4 py-3"><Skeleton className="h-4 w-full" /></td>
+                      </tr>
+                    ))
+                  ) : ledgerData?.lines?.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="text-center py-12 text-slate-400 text-sm">
+                        No hay movimientos en el período seleccionado
+                      </td>
+                    </tr>
+                  ) : (
+                    <>
+                      {ledgerData?.lines?.map((line) => (
+                        <tr key={line.id} className="border-b border-slate-50 hover:bg-slate-50">
+                          <td className="px-4 py-2.5 text-sm text-slate-600">{formatDate(line.date)}</td>
+                          <td className="px-4 py-2.5 text-sm font-mono text-slate-500">{line.entryNumber}</td>
+                          <td className="px-4 py-2.5 text-sm text-slate-700">{line.entryDescription}</td>
+                          <td className="px-4 py-2.5 text-sm text-right font-mono text-slate-700">
+                            {line.debit > 0 ? formatCurrencyExact(line.debit) : ''}
+                          </td>
+                          <td className="px-4 py-2.5 text-sm text-right font-mono text-slate-700">
+                            {line.credit > 0 ? formatCurrencyExact(line.credit) : ''}
+                          </td>
+                          <td className="px-4 py-2.5 text-sm text-right font-mono font-semibold text-slate-800">
+                            {formatCurrencyExact(line.balance)}
+                          </td>
+                        </tr>
+                      ))}
+                      {/* Totals row */}
+                      <tr className="border-t-2 border-slate-300 bg-slate-50">
+                        <td colSpan={3} className="px-4 py-2.5 text-sm font-bold text-slate-700 text-right">Totales:</td>
+                        <td className="px-4 py-2.5 text-sm text-right font-mono font-bold text-slate-800">{formatCurrencyExact(ledgerData?.totalDebit || 0)}</td>
+                        <td className="px-4 py-2.5 text-sm text-right font-mono font-bold text-slate-800">{formatCurrencyExact(ledgerData?.totalCredit || 0)}</td>
+                        <td className="px-4 py-2.5 text-sm text-right font-mono font-bold text-emerald-700">{formatCurrencyExact(ledgerData?.finalBalance || 0)}</td>
+                      </tr>
+                    </>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  )
+}
+
+function IVASalesReport({ companyId }: { companyId: string }) {
+  const { canExport } = usePermission()
+  const today = new Date().toISOString().split('T')[0]
+  const firstOfMonth = `${today.split('-')[0]}-${today.split('-')[1]}-01`
+  const [from, setFrom] = useState(firstOfMonth)
+  const [to, setTo] = useState(today)
+
+  const { data, isLoading } = useQuery<IVAReportData>({
+    queryKey: ['iva-sales-report', companyId, from, to],
+    queryFn: () => api.get('/api/reports/iva-sales', { companyId, from: from || undefined, to: to || undefined }),
+    enabled: !!companyId,
+  })
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-slate-900">Libro IVA Ventas</h2>
+          <p className="text-sm text-slate-500">Registro de ventas gravadas con IVA</p>
+        </div>
+        {canExport('reports') && (
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => data && exportIVASalesToPDF(data, from, to)} disabled={!data}>
+              <FileDown className="mr-2 h-4 w-4" />
+              Descargar PDF
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => window.print()}>
+              <Printer className="mr-2 h-4 w-4" />
+              Imprimir
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {/* Date filters */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex flex-col sm:flex-row items-end gap-4">
+            <div className="space-y-2 flex-1">
+              <Label>Desde</Label>
+              <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+            </div>
+            <div className="space-y-2 flex-1">
+              <Label>Hasta</Label>
+              <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Entries table */}
+      <Card>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[700px]">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50">
+                  <th className="text-left px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider w-24">Fecha</th>
+                  <th className="text-left px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider w-16">#</th>
+                  <th className="text-left px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Descripción</th>
+                  <th className="text-left px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Cliente</th>
+                  <th className="text-right px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider w-28">Neto</th>
+                  <th className="text-center px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider w-20">Alic.</th>
+                  <th className="text-right px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider w-28">IVA</th>
+                  <th className="text-right px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider w-28">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {isLoading ? (
+                  Array.from({ length: 6 }).map((_, i) => (
+                    <tr key={i} className="border-b border-slate-100">
+                      {Array.from({ length: 8 }).map((_, j) => (
+                        <td key={j} className="px-4 py-3"><Skeleton className="h-4 w-full" /></td>
+                      ))}
+                    </tr>
+                  ))
+                ) : data?.entries?.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="text-center py-12 text-slate-400 text-sm">
+                      No hay ventas gravadas en el período seleccionado
+                    </td>
+                  </tr>
+                ) : (
+                  data?.entries?.map((entry, idx) => (
+                    <tr key={idx} className="border-b border-slate-50 hover:bg-slate-50">
+                      <td className="px-4 py-2.5 text-sm text-slate-600">{formatDate(entry.date)}</td>
+                      <td className="px-4 py-2.5 text-sm font-mono text-slate-500">{entry.number}</td>
+                      <td className="px-4 py-2.5 text-sm text-slate-700 max-w-[200px] truncate" title={entry.description}>{entry.description}</td>
+                      <td className="px-4 py-2.5 text-sm text-slate-600">{entry.client || '—'}</td>
+                      <td className="px-4 py-2.5 text-sm text-right font-mono text-slate-700">{formatCurrencyExact(entry.netAmount)}</td>
+                      <td className="px-4 py-2.5 text-sm text-center">
+                        <Badge variant="outline" className="text-[10px] font-mono">{entry.taxRate}%</Badge>
+                      </td>
+                      <td className="px-4 py-2.5 text-sm text-right font-mono text-slate-700">{formatCurrencyExact(entry.taxAmount)}</td>
+                      <td className="px-4 py-2.5 text-sm text-right font-mono font-semibold text-slate-800">{formatCurrencyExact(entry.total)}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Totals Summary */}
+      {data?.totals && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Resumen de Totales</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-600">Neto Gravado 21%</span>
+                  <span className="font-mono font-medium text-slate-800">{formatCurrencyExact(data.totals.gravado21)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-600">IVA 21%</span>
+                  <span className="font-mono font-medium text-red-700">{formatCurrencyExact(data.totals.iva21)}</span>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-600">Neto Gravado 10.5%</span>
+                  <span className="font-mono font-medium text-slate-800">{formatCurrencyExact(data.totals.gravado105)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-600">IVA 10.5%</span>
+                  <span className="font-mono font-medium text-red-700">{formatCurrencyExact(data.totals.iva105)}</span>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-600">Neto Gravado 27%</span>
+                  <span className="font-mono font-medium text-slate-800">{formatCurrencyExact(data.totals.gravado27)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-600">IVA 27%</span>
+                  <span className="font-mono font-medium text-red-700">{formatCurrencyExact(data.totals.iva27)}</span>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-600">Exento</span>
+                  <span className="font-mono font-medium text-slate-800">{formatCurrencyExact(data.totals.exento)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-600">No Gravado</span>
+                  <span className="font-mono font-medium text-slate-800">{formatCurrencyExact(data.totals.noGravado)}</span>
+                </div>
+              </div>
+            </div>
+            <Separator className="my-4" />
+            <div className="flex justify-between text-lg font-bold">
+              <span>Total IVA Ventas</span>
+              <span className="font-mono text-emerald-700">{formatCurrencyExact(data.totals.total)}</span>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  )
+}
+
+function IVAPurchasesReport({ companyId }: { companyId: string }) {
+  const { canExport } = usePermission()
+  const today = new Date().toISOString().split('T')[0]
+  const firstOfMonth = `${today.split('-')[0]}-${today.split('-')[1]}-01`
+  const [from, setFrom] = useState(firstOfMonth)
+  const [to, setTo] = useState(today)
+
+  const { data, isLoading } = useQuery<IVAReportData>({
+    queryKey: ['iva-purchases-report', companyId, from, to],
+    queryFn: () => api.get('/api/reports/iva-purchases', { companyId, from: from || undefined, to: to || undefined }),
+    enabled: !!companyId,
+  })
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-slate-900">Libro IVA Compras</h2>
+          <p className="text-sm text-slate-500">Registro de compras con crédito fiscal IVA</p>
+        </div>
+        {canExport('reports') && (
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => data && exportIVAPurchasesToPDF(data, from, to)} disabled={!data}>
+              <FileDown className="mr-2 h-4 w-4" />
+              Descargar PDF
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => window.print()}>
+              <Printer className="mr-2 h-4 w-4" />
+              Imprimir
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {/* Date filters */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex flex-col sm:flex-row items-end gap-4">
+            <div className="space-y-2 flex-1">
+              <Label>Desde</Label>
+              <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+            </div>
+            <div className="space-y-2 flex-1">
+              <Label>Hasta</Label>
+              <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Entries table */}
+      <Card>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[700px]">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50">
+                  <th className="text-left px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider w-24">Fecha</th>
+                  <th className="text-left px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider w-16">#</th>
+                  <th className="text-left px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Descripción</th>
+                  <th className="text-left px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Proveedor</th>
+                  <th className="text-right px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider w-28">Neto</th>
+                  <th className="text-center px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider w-20">Alic.</th>
+                  <th className="text-right px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider w-28">IVA</th>
+                  <th className="text-right px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider w-28">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {isLoading ? (
+                  Array.from({ length: 6 }).map((_, i) => (
+                    <tr key={i} className="border-b border-slate-100">
+                      {Array.from({ length: 8 }).map((_, j) => (
+                        <td key={j} className="px-4 py-3"><Skeleton className="h-4 w-full" /></td>
+                      ))}
+                    </tr>
+                  ))
+                ) : data?.entries?.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="text-center py-12 text-slate-400 text-sm">
+                      No hay compras con IVA en el período seleccionado
+                    </td>
+                  </tr>
+                ) : (
+                  data?.entries?.map((entry, idx) => (
+                    <tr key={idx} className="border-b border-slate-50 hover:bg-slate-50">
+                      <td className="px-4 py-2.5 text-sm text-slate-600">{formatDate(entry.date)}</td>
+                      <td className="px-4 py-2.5 text-sm font-mono text-slate-500">{entry.number}</td>
+                      <td className="px-4 py-2.5 text-sm text-slate-700 max-w-[200px] truncate" title={entry.description}>{entry.description}</td>
+                      <td className="px-4 py-2.5 text-sm text-slate-600">{entry.client || '—'}</td>
+                      <td className="px-4 py-2.5 text-sm text-right font-mono text-slate-700">{formatCurrencyExact(entry.netAmount)}</td>
+                      <td className="px-4 py-2.5 text-sm text-center">
+                        <Badge variant="outline" className="text-[10px] font-mono">{entry.taxRate}%</Badge>
+                      </td>
+                      <td className="px-4 py-2.5 text-sm text-right font-mono text-slate-700">{formatCurrencyExact(entry.taxAmount)}</td>
+                      <td className="px-4 py-2.5 text-sm text-right font-mono font-semibold text-slate-800">{formatCurrencyExact(entry.total)}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Totals Summary */}
+      {data?.totals && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Resumen de Totales</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-600">Neto Gravado 21%</span>
+                  <span className="font-mono font-medium text-slate-800">{formatCurrencyExact(data.totals.gravado21)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-600">Crédito Fiscal 21%</span>
+                  <span className="font-mono font-medium text-emerald-700">{formatCurrencyExact(data.totals.iva21)}</span>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-600">Neto Gravado 10.5%</span>
+                  <span className="font-mono font-medium text-slate-800">{formatCurrencyExact(data.totals.gravado105)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-600">Crédito Fiscal 10.5%</span>
+                  <span className="font-mono font-medium text-emerald-700">{formatCurrencyExact(data.totals.iva105)}</span>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-600">Neto Gravado 27%</span>
+                  <span className="font-mono font-medium text-slate-800">{formatCurrencyExact(data.totals.gravado27)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-600">Crédito Fiscal 27%</span>
+                  <span className="font-mono font-medium text-emerald-700">{formatCurrencyExact(data.totals.iva27)}</span>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-600">Exento</span>
+                  <span className="font-mono font-medium text-slate-800">{formatCurrencyExact(data.totals.exento)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-600">No Gravado</span>
+                  <span className="font-mono font-medium text-slate-800">{formatCurrencyExact(data.totals.noGravado)}</span>
+                </div>
+              </div>
+            </div>
+            <Separator className="my-4" />
+            <div className="flex justify-between text-lg font-bold">
+              <span>Total IVA Compras</span>
+              <span className="font-mono text-emerald-700">{formatCurrencyExact(data.totals.total)}</span>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  )
+}
+
+function ReportSkeleton() {
+  return (
+    <Card>
+      <CardContent className="p-6 space-y-4">
+        <Skeleton className="h-6 w-48" />
+        <Skeleton className="h-4 w-32" />
+        <div className="space-y-3 mt-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="flex justify-between">
+              <Skeleton className="h-4 w-48" />
+              <Skeleton className="h-4 w-28" />
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}

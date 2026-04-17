@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #FFFFFF;
+    font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'SimHei', system-ui, sans-serif;
+  }
+  #mindmap { padding: 60px 80px; display: inline-block; min-width: 100%; position: relative; }
+  #mindmap > svg.lines {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    pointer-events: none; z-index: 0;
+  }
+
+  .map-title {
+    font-size: 22px; font-weight: 700; color: #1E293B; text-align: center; margin-bottom: 8px;
+  }
+  .map-subtitle {
+    font-size: 13px; color: #64748B; text-align: center; margin-bottom: 48px;
+  }
+
+  .lr-tree { display: flex; align-items: center; gap: 0; position: relative; }
+  .lr-tree .root-node {
+    padding: 20px 32px; border-radius: 14px;
+    margin: 0 60px; text-align: center;
+  }
+  .sub-branch { display: flex; align-items: flex-start; gap: 0; }
+  .left-branches { display: flex; flex-direction: column; gap: 16px; }
+  .left-branch { display: flex; align-items: flex-start; flex-direction: row-reverse; gap: 0; }
+  .left-branch .children {
+    display: flex; flex-direction: column; gap: 6px;
+    margin-right: 48px; align-items: flex-end;
+  }
+  .left-branch .children:has(.sub-branch) { gap: 10px; }
+  .left-branch .sub-branch .children { gap: 5px; margin-right: 40px; margin-left: 0; align-items: flex-end; }
+  .left-branch .sub-branch { flex-direction: row-reverse; }
+  .right-branches { display: flex; flex-direction: column; gap: 16px; }
+  .right-branch { display: flex; align-items: flex-start; gap: 0; }
+  .right-branch .children {
+    display: flex; flex-direction: column; gap: 6px; margin-left: 48px; align-items: flex-start;
+  }
+  .right-branch .children:has(.sub-branch) { gap: 10px; }
+  .right-branch .sub-branch .children { gap: 5px; margin-left: 40px; align-items: flex-start; }
+
+  .root-node {
+    color: white; font-size: 18px; font-weight: 700;
+    padding: 18px 28px; border-radius: 12px;
+    white-space: nowrap; flex-shrink: 0; align-self: center;
+  }
+  #mindmap[data-intent="technical"] .root-node {
+    background: linear-gradient(135deg, #334155, #475569);
+    box-shadow: 0 4px 12px rgba(51,65,85,0.25);
+  }
+
+  .branch-node {
+    font-size: 14px; font-weight: 600;
+    padding: 10px 18px; border-radius: 8px;
+    white-space: nowrap; flex-shrink: 0; border: 2px solid;
+  }
+  .sub-node {
+    font-size: 12px; font-weight: 500;
+    padding: 6px 12px; border-radius: 6px;
+    white-space: nowrap; flex-shrink: 0; border: 1.5px solid;
+    background: #F8FAFC;
+  }
+  .leaf {
+    font-size: 12px; font-weight: 400; color: #475569;
+    padding: 4px 10px; background: #FAFAFA;
+    border-radius: 12px; border: 1px solid #E5E7EB;
+    white-space: nowrap; line-height: 1.5;
+  }
+
+  .c-blue { background: #EFF6FF; border-color: #3B82F6; color: #1E40AF; }
+  .c-green { background: #F0FDF4; border-color: #10B981; color: #065F46; }
+  .c-amber { background: #FFF7ED; border-color: #F59E0B; color: #92400E; }
+  .c-purple { background: #F5F3FF; border-color: #8B5CF6; color: #5B21B6; }
+  .c-red { background: #FEF2F2; border-color: #EF4444; color: #991B1B; }
+  .c-cyan { background: #ECFEFF; border-color: #06B6D4; color: #155E75; }
+  .c-teal { background: #F0FDFA; border-color: #14B8A6; color: #134E4A; }
+
+  .c-blue .sub-node { background: #F0F7FF; border-color: #93C5FD; color: #1E40AF; }
+  .c-green .sub-node { background: #F2FDF6; border-color: #6EE7B7; color: #065F46; }
+  .c-amber .sub-node { background: #FFF9F0; border-color: #FCD34D; color: #92400E; }
+  .c-purple .sub-node { background: #F8F6FF; border-color: #C4B5FD; color: #5B21B6; }
+  .c-red .sub-node { background: #FFF5F5; border-color: #FCA5A5; color: #991B1B; }
+  .c-cyan .sub-node { background: #F0FEFF; border-color: #67E8F9; color: #155E75; }
+  .c-teal .sub-node { background: #F2FDFA; border-color: #5EEAD4; color: #134E4A; }
+
+  .core-badge {
+    display: inline-block; padding: 1px 6px; background: #DBEAFE; color: #1E40AF;
+    border-radius: 4px; font-size: 9px; font-weight: 700; margin-left: 4px;
+  }
+</style>
+</head>
+<body>
+<div id="mindmap" data-intent="technical">
+  <div class="map-title">Bounded Contexts — Dominios del ERP Contable</div>
+  <div class="map-subtitle">Domain Driven Design: cada contexto delimitado con responsabilidad unica</div>
+
+  <div class="lr-tree">
+    <!-- Left branches -->
+    <div class="left-branches">
+      <!-- Auth -->
+      <div class="left-branch">
+        <div class="branch-node c-red">
+          Auth Service
+          <span class="core-badge">SEGURIDAD</span>
+        </div>
+        <div class="children">
+          <div class="leaf">Login / Registro</div>
+          <div class="leaf">JWT + Refresh Token</div>
+          <div class="leaf">Roles por Tenant</div>
+          <div class="leaf">Rate Limiting</div>
+        </div>
+      </div>
+
+      <!-- Tenant -->
+      <div class="left-branch">
+        <div class="branch-node c-purple">
+          Tenant Service
+          <span class="core-badge">MULTI-T</span>
+        </div>
+        <div class="children">
+          <div class="leaf">Gestion de Empresas</div>
+          <div class="leaf">Aislamiento tenant_id</div>
+          <div class="leaf">Planes SaaS</div>
+          <div class="leaf">Configuracion Fiscal</div>
+        </div>
+      </div>
+
+      <!-- User -->
+      <div class="left-branch">
+        <div class="branch-node c-cyan">
+          User / CRM Service
+        </div>
+        <div class="children">
+          <div class="leaf">Perfiles de Usuario</div>
+          <div class="leaf">Clientes CRUD</div>
+          <div class="leaf">Proveedores CRUD</div>
+          <div class="leaf">Permisos RBAC</div>
+        </div>
+      </div>
+
+      <!-- AI -->
+      <div class="left-branch">
+        <div class="branch-node c-amber">
+          AI Service
+          <span class="core-badge">IA</span>
+        </div>
+        <div class="children">
+          <div class="leaf">Clasificacion de Gastos</div>
+          <div class="leaf">Prediccion Flujo de Caja</div>
+          <div class="leaf">Alertas Inteligentes</div>
+          <div class="leaf">Recomendaciones</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Root -->
+    <div class="root-node">ERP Contable<br>Inteligente</div>
+
+    <!-- Right branches -->
+    <div class="right-branches">
+      <!-- Accounting (CORE) -->
+      <div class="right-branch">
+        <div class="branch-node c-blue">
+          Accounting Engine
+          <span class="core-badge">CORE</span>
+        </div>
+        <div class="children">
+          <div class="sub-branch">
+            <div class="sub-node c-blue">Plan de Cuentas</div>
+            <div class="children">
+              <div class="leaf">Activo / Pasivo / PN</div>
+              <div class="leaf">Cuentas Imputables</div>
+            </div>
+          </div>
+          <div class="sub-branch">
+            <div class="sub-node c-blue">Asientos Contables</div>
+            <div class="children">
+              <div class="leaf">Partida Doble</div>
+              <div class="leaf">AccountingValidator</div>
+              <div class="leaf">Accounting Facade</div>
+            </div>
+          </div>
+          <div class="sub-branch">
+            <div class="sub-node c-blue">Libros</div>
+            <div class="children">
+              <div class="leaf">Libro Diario</div>
+              <div class="leaf">Libro Mayor</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Billing -->
+      <div class="right-branch">
+        <div class="branch-node c-green">
+          Billing Service
+          <span class="core-badge">EVENT</span>
+        </div>
+        <div class="children">
+          <div class="leaf">Facturas A/B/C</div>
+          <div class="leaf">Productos / Servicios</div>
+          <div class="leaf">Integracion AFIP</div>
+          <div class="leaf">invoice.created</div>
+        </div>
+      </div>
+
+      <!-- Payments -->
+      <div class="right-branch">
+        <div class="branch-node c-teal">
+          Payments Service
+        </div>
+        <div class="children">
+          <div class="leaf">Caja / Bancos</div>
+          <div class="leaf">Movimientos</div>
+          <div class="leaf">Conciliacion Bancaria</div>
+          <div class="leaf">payment.received</div>
+        </div>
+      </div>
+
+      <!-- Reporting -->
+      <div class="right-branch">
+        <div class="branch-node c-amber">
+          Reporting Service
+        </div>
+        <div class="children">
+          <div class="leaf">Balance General</div>
+          <div class="leaf">Estado de Resultados</div>
+          <div class="leaf">Flujo de Caja</div>
+          <div class="leaf">Export PDF / Excel</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function drawAllLines() {
+  const map = document.getElementById('mindmap');
+  if (!map) { return; }
+  const cRect = map.getBoundingClientRect();
+  const old = map.querySelector('svg.lines');
+  if (old) old.remove();
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.classList.add('lines');
+  svg.setAttribute('width', cRect.width);
+  svg.setAttribute('height', cRect.height);
+  svg.style.cssText = 'position:absolute;top:0;left:0;pointer-events:none;z-index:1;';
+  let lineCount = 0;
+  function rel(el) {
+    const r = el.getBoundingClientRect();
+    return { cx: r.left-cRect.left+r.width/2, cy: r.top-cRect.top+r.height/2, left: r.left-cRect.left, right: r.right-cRect.left };
+  }
+  function drawLine(x1,y1,x2,y2,color,width) {
+    const l = document.createElementNS('http://www.w3.org/2000/svg','line');
+    l.setAttribute('x1',Math.round(x1)); l.setAttribute('y1',Math.round(y1));
+    l.setAttribute('x2',Math.round(x2)); l.setAttribute('y2',Math.round(y2));
+    l.setAttribute('stroke',color); l.setAttribute('stroke-width',width); l.setAttribute('stroke-linecap','round');
+    svg.appendChild(l); lineCount++;
+  }
+  const lineStyles = [
+    {color:'#64748B',width:2.5},{color:'#94A3B8',width:2},{color:'#A8B4C2',width:1.5},
+    {color:'#B8C2CC',width:1.2},{color:'#CBD5E1',width:1}
+  ];
+  function getLineStyle(depth) { return lineStyles[Math.min(depth,lineStyles.length-1)]; }
+  function connect(parentEl,childEls,color,width,dir) {
+    if(!childEls.length) return;
+    const p = rel(parentEl);
+    const startX = dir==='left'?p.left:p.right;
+    const startY = p.cy;
+    if(childEls.length===1){const c=rel(childEls[0]);const endX=dir==='left'?c.right:c.left;const midY=Math.round((startY+c.cy)/2);drawLine(startX,midY,endX,midY,color,width);return;}
+    let closestEdge;
+    if(dir==='left'){closestEdge=Math.max(...childEls.map(ch=>rel(ch).right));}else{closestEdge=Math.min(...childEls.map(ch=>rel(ch).left));}
+    const childClearance=16;const midpoint=startX+(closestEdge-startX)/2;
+    const midFromChild=dir==='left'?closestEdge+childClearance:closestEdge-childClearance;
+    const midX=dir==='left'?Math.min(midpoint,midFromChild):Math.max(midpoint,midFromChild);
+    drawLine(startX,startY,midX,startY,color,width);
+    const allCYs=childEls.map(ch=>rel(ch).cy);const minY=Math.min(startY,...allCYs);const maxY=Math.max(startY,...allCYs);
+    drawLine(midX,minY,midX,maxY,color,width);
+    childEls.forEach(ch=>{const c=rel(ch);const endX=dir==='left'?c.right:c.left;drawLine(midX,c.cy,endX,c.cy,color,width);});
+  }
+  const NODE_SEL='.branch-node,.sub-node,.leaf,.deep-node';
+  const CONTAINER_SEL=':scope > .children, :scope > .leaf-group, :scope > .deep-group';
+  function processChildren(parentNodeEl,containerEl,branchColor,depth,dir){
+    if(!containerEl) return;
+    const childNodeEls=[];
+    for(const wrapper of containerEl.children){const nodeEl=wrapper.matches?.(NODE_SEL)?wrapper:wrapper.querySelector(NODE_SEL);if(nodeEl)childNodeEls.push(nodeEl);}
+    if(!childNodeEls.length) return;
+    const style=getLineStyle(depth);connect(parentNodeEl,childNodeEls,style.color,style.width,dir);
+    for(const wrapper of containerEl.children){const nodeEl=wrapper.matches?.(NODE_SEL)?wrapper:wrapper.querySelector(NODE_SEL);if(!nodeEl)continue;wrapper.querySelectorAll(CONTAINER_SEL).forEach(nc=>processChildren(nodeEl,nc,branchColor,depth+1,dir));}
+  }
+  const rootNode=map.querySelector('.root-node');
+  if(!rootNode) return;
+  const leftSel='.left-side > .branch, .left-branches > .left-branch, .left-branches > div';
+  const leftBranches=map.querySelectorAll(leftSel);
+  const leftBranchNodes=[];leftBranches.forEach(branch=>{const bNode=branch.querySelector('.branch-node');if(bNode)leftBranchNodes.push(bNode);});
+  if(leftBranchNodes.length) connect(rootNode,leftBranchNodes,lineStyles[0].color,lineStyles[0].width,'left');
+  leftBranches.forEach(branch=>{const bNode=branch.querySelector('.branch-node');if(!bNode)return;processChildren(bNode,branch.querySelector(':scope > .children'),null,1,'left');});
+  const rightSel='.right-side > .branch, .branches > .branch, .right-branches > .right-branch';
+  const rightBranches=map.querySelectorAll(rightSel);
+  const rightBranchNodes=[];rightBranches.forEach(branch=>{const bNode=branch.querySelector('.branch-node');if(bNode)rightBranchNodes.push(bNode);});
+  if(rightBranchNodes.length) connect(rootNode,rightBranchNodes,lineStyles[0].color,lineStyles[0].width,'right');
+  rightBranches.forEach(branch=>{const bNode=branch.querySelector('.branch-node');if(!bNode)return;processChildren(bNode,branch.querySelector(':scope > .children'),null,1,'right');});
+  map.insertBefore(svg,map.firstChild);
+}
+window.addEventListener('load',()=>setTimeout(drawAllLines,300));
+</script>
+</body>
+</html>

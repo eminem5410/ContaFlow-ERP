@@ -1,0 +1,21 @@
+# 1. Detener contenedores actuales
+docker compose down --remove-orphans
+
+# 2. Extraer el tar.gz (reemplaza archivos existentes)
+tar -xzf ContaFlow-ERP-deploy-windows-v2.tar.gz
+
+# 3. Limpiar cache de Docker
+docker builder prune -f
+
+# 4. Reconstruir y levantar (frontend ya incluye los fixes)
+docker compose build --no-cache && docker compose up -d
+
+# 5. Crear tablas Prisma
+docker exec contaflow-app npx prisma@6 db push --accept-data-loss
+
+# 6. Seed permisos (botón en UI o curl)
+# Botón "Seed Permisos" en Roles y Permisos
+
+# 7. Verificar
+docker compose ps
+docker compose logs backend --tail=10

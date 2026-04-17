@@ -1,0 +1,76 @@
+name: ContaFlow ERP — CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+concurrency:
+  group: ci-cd-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '20'
+  DOTNET_VERSION: '8.0.x'
+
+jobs:
+  # ── Backend — Restore, Build & Test (.NET 8) ───────────────────────────────
+  backend:
+    name: Backend — Build & Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore NuGet packages
+        run: dotnet restore ContaFlow.sln
+
+      - name: Build backend solution
+        run: dotnet build ContaFlow.sln --no-restore --configuration Release
+
+      - name: Run all tests
+        run: dotnet test ContaFlow.sln --no-restore --configuration Release --verbosity normal
+
+  # ── Frontend — Install, Build & Lint (Next.js) ────────────────────────────
+  frontend:
+    name: Frontend — Build & Lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Run Next.js lint
+        run: npx next lint
+
+      - name: Build Next.js application
+        run: npm run build
+        env:
+          DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/contaflow_test"
+          JWT_SECRET: "ci_cd_test_secret_key_minimum_32_characters!!"

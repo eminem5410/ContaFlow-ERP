@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #FFFFFF;
+    font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'SimHei', system-ui, sans-serif;
+    display: flex; justify-content: center; padding: 48px;
+  }
+  #root { width: fit-content; min-width: 1000px; }
+
+  .chart-title {
+    font-size: 22px; font-weight: 700; color: #1E293B;
+    text-align: center; margin-bottom: 8px;
+  }
+  .chart-subtitle {
+    font-size: 13px; color: #64748B; text-align: center; margin-bottom: 40px;
+  }
+
+  /* Layer containers */
+  .layer {
+    border-radius: 14px; padding: 24px; margin-bottom: 20px;
+    position: relative;
+  }
+  .layer-label {
+    position: absolute; top: -11px; left: 20px;
+    background: #FFFFFF; padding: 0 12px;
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;
+    border-radius: 4px;
+  }
+
+  /* Frontend layer */
+  .layer-frontend { background: #EFF6FF; border: 1.5px solid #BFDBFE; }
+  .layer-frontend .layer-label { color: #1E40AF; }
+
+  /* Gateway layer */
+  .layer-gateway { background: #FFF7ED; border: 1.5px solid #FED7AA; }
+  .layer-gateway .layer-label { color: #92400E; }
+
+  /* Services layer */
+  .layer-services { background: #F0FDF4; border: 1.5px solid #BBF7D0; }
+  .layer-services .layer-label { color: #065F46; }
+
+  /* Event bus layer */
+  .layer-events { background: #F5F3FF; border: 1.5px solid #DDD6FE; }
+  .layer-events .layer-label { color: #5B21B6; }
+
+  /* Data layer */
+  .layer-data { background: #FEF2F2; border: 1.5px solid #FECACA; }
+  .layer-data .layer-label { color: #991B1B; }
+
+  /* Infra layer */
+  .layer-infra { background: #F1F5F9; border: 1.5px solid #CBD5E1; }
+  .layer-infra .layer-label { color: #334155; }
+
+  /* Node cards */
+  .nodes-row {
+    display: flex; gap: 16px; justify-content: center; flex-wrap: wrap;
+  }
+  .node {
+    background: #FFFFFF; border-radius: 10px; padding: 16px 22px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    border: 1.5px solid #E2E8F0;
+    text-align: center; min-width: 140px;
+    transition: transform 0.15s;
+  }
+  .node:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+  .node-icon { font-size: 22px; margin-bottom: 6px; }
+  .node-title { font-size: 14px; font-weight: 700; color: #1E293B; line-height: 1.3; }
+  .node-desc { font-size: 11px; color: #64748B; margin-top: 4px; line-height: 1.4; }
+  .node-tag {
+    display: inline-block; margin-top: 6px; padding: 2px 8px;
+    border-radius: 10px; font-size: 10px; font-weight: 600;
+  }
+
+  /* Special node styles */
+  .node-core {
+    border-color: #3B82F6; border-width: 2px;
+    background: linear-gradient(135deg, #EFF6FF, #FFFFFF);
+  }
+  .node-core .node-tag { background: #DBEAFE; color: #1E40AF; }
+
+  .node-billing { border-color: #10B981; }
+  .node-billing .node-tag { background: #D1FAE5; color: #065F46; }
+
+  .node-payments { border-color: #F59E0B; }
+  .node-payments .node-tag { background: #FEF3C7; color: #92400E; }
+
+  .node-auth { border-color: #EF4444; }
+  .node-auth .node-tag { background: #FEE2E2; color: #991B1B; }
+
+  .node-tenant { border-color: #8B5CF6; }
+  .node-tenant .node-tag { background: #EDE9FE; color: #5B21B6; }
+
+  .node-reporting { border-color: #06B6D4; }
+  .node-reporting .node-tag { background: #CFFAFE; color: #155E75; }
+
+  .node-ai { border-color: #EC4899; }
+  .node-ai .node-tag { background: #FCE7F3; color: #9D174D; }
+
+  .node-user { border-color: #64748B; }
+  .node-user .node-tag { background: #F1F5F9; color: #334155; }
+
+  /* DB nodes */
+  .node-db {
+    border-radius: 10px; background: #FFFFFF;
+    border: 1.5px solid #FECACA;
+  }
+  .node-db .node-tag { background: #FEE2E2; color: #991B1B; }
+
+  /* Event bus special */
+  .event-bus-bar {
+    display: flex; align-items: center; justify-content: center; gap: 16px;
+    padding: 12px 20px; background: linear-gradient(90deg, #EDE9FE, #F5F3FF, #EDE9FE);
+    border-radius: 10px; border: 1.5px dashed #8B5CF6;
+  }
+  .event-icon { font-size: 20px; }
+  .event-text { font-size: 14px; font-weight: 600; color: #5B21B6; }
+  .event-topics {
+    display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 8px;
+  }
+  .event-topic {
+    padding: 3px 10px; background: #F5F3FF; border: 1px solid #DDD6FE;
+    border-radius: 6px; font-size: 11px; color: #6D28D9; font-weight: 500;
+  }
+
+  /* Arrows between layers */
+  .arrow-row {
+    text-align: center; padding: 4px 0; color: #94A3B8; font-size: 20px;
+  }
+
+  /* Legend */
+  .legend {
+    display: flex; gap: 20px; justify-content: center; flex-wrap: wrap;
+    margin-top: 28px; padding: 16px 24px;
+    background: #F8FAFC; border-radius: 10px; border: 1px solid #E2E8F0;
+  }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #475569; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 3px; border: 2px solid; }
+
+  /* Evolve badge */
+  .evolve-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 14px; background: #F0FDF4; border: 1px solid #BBF7D0;
+    border-radius: 8px; font-size: 12px; color: #065F46; font-weight: 600;
+    margin: 0 auto 20px;
+  }
+
+  .two-col { display: flex; gap: 16px; justify-content: center; }
+  .two-col > * { flex: 1; max-width: 220px; }
+</style>
+</head>
+<body>
+<div id="root">
+  <div class="chart-title">ERP Contable Inteligente — Arquitectura del Sistema</div>
+  <div class="chart-subtitle">Modular Monolith con evolucion a Microservicios Event-Driven</div>
+
+  <!-- Capa 1: Frontend -->
+  <div class="layer layer-frontend">
+    <div class="layer-label">Capa de Presentacion</div>
+    <div class="nodes-row">
+      <div class="node" style="border-color: #3B82F6;">
+        <div class="node-icon">&#128187;</div>
+        <div class="node-title">Next.js 15 App</div>
+        <div class="node-desc">Dashboard + CRUDs</div>
+        <div class="node-tag" style="background:#DBEAFE;color:#1E40AF;">React Server Components</div>
+      </div>
+      <div class="node" style="border-color: #64748B;">
+        <div class="node-icon">&#128241;</div>
+        <div class="node-title">PWA Mobile</div>
+        <div class="node-desc">Responsive Design</div>
+        <div class="node-tag" style="background:#F1F5F9;color:#334155;">Tailwind CSS 4</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow-row">&#9660;</div>
+
+  <!-- Capa 2: API Gateway -->
+  <div class="layer layer-gateway">
+    <div class="layer-label">Capa de Acceso</div>
+    <div class="nodes-row">
+      <div class="node node-auth">
+        <div class="node-icon">&#128274;</div>
+        <div class="node-title">API Gateway</div>
+        <div class="node-desc">Auth + Rate Limiting + Routing</div>
+        <div class="node-tag" style="background:#FEE2E2;color:#991B1B;">JWT + Refresh Token</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow-row">&#9660;</div>
+
+  <!-- Capa 3: Servicios de Dominio -->
+  <div class="layer layer-services">
+    <div class="layer-label">Capa de Servicios — Bounded Contexts (Modular Monolith)</div>
+    <div class="two-col" style="margin-bottom: 12px;">
+      <div class="node node-auth">
+        <div class="node-icon">&#128100;</div>
+        <div class="node-title">Auth Service</div>
+        <div class="node-desc">Login / Registro / Roles</div>
+        <div class="node-tag" style="background:#FEE2E2;color:#991B1B;">.NET 8</div>
+      </div>
+      <div class="node node-tenant">
+        <div class="node-icon">&#127970;</div>
+        <div class="node-title">Tenant Service</div>
+        <div class="node-desc">Multi-tenant / Empresas</div>
+        <div class="node-tag" style="background:#EDE9FE;color:#5B21B6;">Aislamiento</div>
+      </div>
+      <div class="node node-user">
+        <div class="node-icon">&#128101;</div>
+        <div class="node-title">User Service</div>
+        <div class="node-desc">Perfiles / Permisos</div>
+        <div class="node-tag" style="background:#F1F5F9;color:#334155;">RBAC</div>
+      </div>
+    </div>
+    <div class="two-col" style="margin-bottom: 12px;">
+      <div class="node node-core">
+        <div class="node-icon">&#9881;</div>
+        <div class="node-title">Accounting Engine</div>
+        <div class="node-desc">Plan de Cuentas / Asientos / Validacion</div>
+        <div class="node-tag" style="background:#DBEAFE;color:#1E40AF;">CORE</div>
+      </div>
+      <div class="node node-billing">
+        <div class="node-icon">&#128196;</div>
+        <div class="node-title">Billing Service</div>
+        <div class="node-desc">Facturas A/B/C / AFIP</div>
+        <div class="node-tag" style="background:#D1FAE5;color:#065F46;">Event Emitter</div>
+      </div>
+    </div>
+    <div class="two-col">
+      <div class="node node-payments">
+        <div class="node-icon">&#128176;</div>
+        <div class="node-title">Payments Service</div>
+        <div class="node-desc">Caja / Bancos / Conciliacion</div>
+        <div class="node-tag" style="background:#FEF3C7;color:#92400E;">Tesoreria</div>
+      </div>
+      <div class="node node-reporting">
+        <div class="node-icon">&#128202;</div>
+        <div class="node-title">Reporting Service</div>
+        <div class="node-desc">Balance / Estado Resultados</div>
+        <div class="node-tag" style="background:#CFFAFE;color:#155E75;">Event Consumer</div>
+      </div>
+      <div class="node node-ai">
+        <div class="node-icon">&#129302;</div>
+        <div class="node-title">AI Service</div>
+        <div class="node-desc">Prediccion / Alertas / Clasificacion</div>
+        <div class="node-tag" style="background:#FCE7F3;color:#9D174D;">Diferencial</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow-row">&#9660;</div>
+
+  <!-- Capa 4: Event Bus -->
+  <div class="layer layer-events">
+    <div class="layer-label">Event Bus — Comunicacion Desacoplada</div>
+    <div class="event-bus-bar">
+      <div class="event-icon">&#128260;</div>
+      <div class="event-text">MediatR (In-Process) &rarr; Kafka (Evolucion)</div>
+    </div>
+    <div class="event-topics">
+      <div class="event-topic">invoice.created</div>
+      <div class="event-topic">payment.received</div>
+      <div class="event-topic">journal.entry_posted</div>
+      <div class="event-topic">tax.alert_triggered</div>
+      <div class="event-topic">tenant.created</div>
+    </div>
+  </div>
+
+  <div class="arrow-row">&#9660;</div>
+
+  <!-- Capa 5: Datos -->
+  <div class="layer layer-data">
+    <div class="layer-label">Capa de Datos</div>
+    <div class="nodes-row">
+      <div class="node node-db" style="border-color: #3B82F6;">
+        <div class="node-icon">&#128451;</div>
+        <div class="node-title">PostgreSQL</div>
+        <div class="node-desc">Multi-tenant (tenant_id)</div>
+        <div class="node-tag" style="background:#DBEAFE;color:#1E40AF;">Base Principal</div>
+      </div>
+      <div class="node node-db" style="border-color: #EF4444;">
+        <div class="node-icon">&#9889;</div>
+        <div class="node-title">Redis</div>
+        <div class="node-desc">Cache / Sessions</div>
+        <div class="node-tag" style="background:#FEE2E2;color:#991B1B;">Performance</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow-row">&#9660;</div>
+
+  <!-- Capa 6: Infraestructura -->
+  <div class="layer layer-infra">
+    <div class="layer-label">Infraestructura</div>
+    <div class="nodes-row">
+      <div class="node" style="border-color: #475569;">
+        <div class="node-icon">&#128051;</div>
+        <div class="node-title">Docker + Compose</div>
+        <div class="node-desc">Containerizacion</div>
+      </div>
+      <div class="node" style="border-color: #475569;">
+        <div class="node-icon">&#9729;</div>
+        <div class="node-title">Azure / AWS</div>
+        <div class="node-desc">Cloud Hosting</div>
+      </div>
+      <div class="node" style="border-color: #475569;">
+        <div class="node-icon">&#128736;</div>
+        <div class="node-title">CI/CD Pipeline</div>
+        <div class="node-desc">GitHub Actions</div>
+      </div>
+      <div class="node" style="border-color: #475569;">
+        <div class="node-icon">&#128200;</div>
+        <div class="node-title">Monitoring</div>
+        <div class="node-desc">Serilog + Grafana</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Legend -->
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="border-color:#3B82F6;background:#EFF6FF;"></div> Core Contable</div>
+    <div class="legend-item"><div class="legend-dot" style="border-color:#10B981;background:#F0FDF4;"></div> Facturacion</div>
+    <div class="legend-item"><div class="legend-dot" style="border-color:#F59E0B;background:#FFF7ED;"></div> Tesoreria</div>
+    <div class="legend-item"><div class="legend-dot" style="border-color:#8B5CF6;background:#F5F3FF;"></div> Multi-tenant</div>
+    <div class="legend-item"><div class="legend-dot" style="border-color:#EC4899;background:#FCE7F3;"></div> IA / Diferencial</div>
+    <div class="legend-item"><div class="legend-dot" style="border-color:#EF4444;background:#FEE2E2;"></div> Auth / Seguridad</div>
+  </div>
+</div>
+</body>
+</html>

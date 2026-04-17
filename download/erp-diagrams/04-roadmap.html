@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #FFFFFF;
+    font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'SimHei', system-ui, sans-serif;
+    display: flex; justify-content: center; padding: 48px;
+  }
+  #root { width: fit-content; min-width: 950px; }
+
+  .chart-title {
+    font-size: 22px; font-weight: 700; color: #1E293B;
+    text-align: center; margin-bottom: 8px;
+  }
+  .chart-subtitle {
+    font-size: 13px; color: #64748B; text-align: center; margin-bottom: 40px;
+  }
+
+  /* Timeline */
+  .timeline { position: relative; padding-left: 40px; }
+  .timeline::before {
+    content: ''; position: absolute; left: 18px; top: 0; bottom: 0;
+    width: 3px; background: linear-gradient(to bottom, #64748B, #94A3B8, #CBD5E1);
+    border-radius: 3px;
+  }
+
+  .timeline-item { position: relative; margin-bottom: 24px; }
+  .timeline-dot {
+    position: absolute; left: -32px; top: 16px;
+    width: 14px; height: 14px; border-radius: 50%;
+    border: 3px solid; background: white; z-index: 1;
+  }
+  .timeline-card {
+    background: #FFFFFF; border: 1.5px solid #E2E8F0;
+    border-radius: 12px; padding: 20px 24px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+  }
+  .timeline-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .timeline-phase {
+    padding: 3px 10px; border-radius: 6px; font-size: 11px;
+    font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .timeline-name { font-size: 16px; font-weight: 700; color: #1E293B; }
+  .timeline-duration {
+    margin-left: auto; padding: 3px 10px; background: #F1F5F9;
+    border-radius: 6px; font-size: 11px; color: #64748B; font-weight: 500;
+  }
+  .timeline-items { display: flex; flex-direction: column; gap: 6px; }
+  .timeline-item-text {
+    font-size: 13px; color: #374151; padding-left: 16px; position: relative;
+    line-height: 1.5;
+  }
+  .timeline-item-text::before {
+    content: ''; position: absolute; left: 0; top: 8px;
+    width: 6px; height: 6px; border-radius: 50%; background: #CBD5E1;
+  }
+  .timeline-tech {
+    display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px;
+  }
+  .tech-tag {
+    padding: 2px 8px; background: #F8FAFC; border: 1px solid #E2E8F0;
+    border-radius: 4px; font-size: 10px; color: #64748B; font-weight: 500;
+  }
+
+  /* Phase colors */
+  .dot-0 { border-color: #94A3B8; }
+  .dot-1 { border-color: #3B82F6; }
+  .dot-2 { border-color: #10B981; }
+  .dot-3 { border-color: #F59E0B; }
+  .dot-4 { border-color: #8B5CF6; }
+  .dot-5 { border-color: #EF4444; }
+  .dot-6 { border-color: #06B6D4; }
+
+  .phase-tag-0 { background: #F1F5F9; color: #475569; }
+  .phase-tag-1 { background: #DBEAFE; color: #1E40AF; }
+  .phase-tag-2 { background: #D1FAE5; color: #065F46; }
+  .phase-tag-3 { background: #FEF3C7; color: #92400E; }
+  .phase-tag-4 { background: #EDE9FE; color: #5B21B6; }
+  .phase-tag-5 { background: #FEE2E2; color: #991B1B; }
+  .phase-tag-6 { background: #CFFAFE; color: #155E75; }
+
+  /* Milestone banner */
+  .milestone-banner {
+    margin-top: 32px; padding: 20px 24px;
+    background: linear-gradient(135deg, #1E293B, #334155);
+    border-radius: 12px; color: white; text-align: center;
+  }
+  .milestone-title { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
+  .milestone-items { display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; }
+  .milestone-item {
+    padding: 8px 16px; background: rgba(255,255,255,0.1);
+    border-radius: 8px; font-size: 13px;
+  }
+  .milestone-item strong { color: #60A5FA; }
+
+  /* Strategy note */
+  .strategy-note {
+    margin-top: 20px; padding: 16px 20px;
+    background: #FFF7ED; border: 1px solid #FED7AA; border-radius: 10px;
+    font-size: 13px; color: #92400E; line-height: 1.6;
+  }
+  .strategy-note strong { color: #78350F; }
+</style>
+</head>
+<body>
+<div id="root">
+  <div class="chart-title">Roadmap de Desarrollo — ERP Contable Inteligente</div>
+  <div class="chart-subtitle">Plan unificado: Vision de negocio + Arquitectura tecnica | Target: LATAM</div>
+
+  <div class="timeline">
+    <!-- Fase 0 -->
+    <div class="timeline-item">
+      <div class="timeline-dot dot-0"></div>
+      <div class="timeline-card">
+        <div class="timeline-header">
+          <span class="timeline-phase phase-tag-0">Fase 0</span>
+          <span class="timeline-name">Fundamentos y Vision</span>
+          <span class="timeline-duration">3-5 dias</span>
+        </div>
+        <div class="timeline-items">
+          <div class="timeline-item-text">Definir alcance: ERP contable con IA (no generico)</div>
+          <div class="timeline-item-text">Elegir nicho inicial: Freelancers / Monotributistas</div>
+          <div class="timeline-item-text">Definir modelo SaaS (planes y precios)</div>
+          <div class="timeline-item-text">Setup repositorio + Docker + CI/CD basico</div>
+        </div>
+        <div class="timeline-tech">
+          <span class="tech-tag">GitHub</span>
+          <span class="tech-tag">Docker</span>
+          <span class="tech-tag">Notion / Docs</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Fase 1 -->
+    <div class="timeline-item">
+      <div class="timeline-dot dot-1"></div>
+      <div class="timeline-card">
+        <div class="timeline-header">
+          <span class="timeline-phase phase-tag-1">Fase 1</span>
+          <span class="timeline-name">Auth + Multi-tenant + Core Contable</span>
+          <span class="timeline-duration">3-4 semanas</span>
+        </div>
+        <div class="timeline-items">
+          <div class="timeline-item-text">Auth Service: JWT, roles por tenant, registro/login</div>
+          <div class="timeline-item-text">Tenant Service: gestion de empresas, aislamiento de datos</div>
+          <div class="timeline-item-text">Accounting Engine: Plan de cuentas CRUD</div>
+          <div class="timeline-item-text">Asientos contables con validacion partida doble (AccountingValidator)</div>
+          <div class="timeline-item-text">Accounting Facade como orquestador</div>
+          <div class="timeline-item-text">Libro Diario / Mayor</div>
+          <div class="timeline-item-text">API Gateway basico (auth middleware + rate limiting)</div>
+          <div class="timeline-item-text">Event Bus in-process (MediatR)</div>
+        </div>
+        <div class="timeline-tech">
+          <span class="tech-tag">.NET 8</span>
+          <span class="tech-tag">PostgreSQL</span>
+          <span class="tech-tag">JWT</span>
+          <span class="tech-tag">MediatR</span>
+          <span class="tech-tag">DDD / Clean Arch</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Fase 2 -->
+    <div class="timeline-item">
+      <div class="timeline-dot dot-2"></div>
+      <div class="timeline-card">
+        <div class="timeline-header">
+          <span class="timeline-phase phase-tag-2">Fase 2</span>
+          <span class="timeline-name">Facturacion + Event-Driven + Reportes</span>
+          <span class="timeline-duration">3-5 semanas</span>
+        </div>
+        <div class="timeline-items">
+          <div class="timeline-item-text">Billing Service: Facturas A/B/C, Clientes CRUD</div>
+          <div class="timeline-item-text">Productos/Servicios</div>
+          <div class="timeline-item-text">Evento invoice.created → Accounting Facade → Asiento automatico</div>
+          <div class="timeline-item-text">Reportes: Balance General, Estado de Resultados</div>
+          <div class="timeline-item-text">Frontend: Dashboard principal + CRUDs</div>
+        </div>
+        <div class="timeline-tech">
+          <span class="tech-tag">Next.js 15</span>
+          <span class="tech-tag">Tailwind CSS</span>
+          <span class="tech-tag">AFIP Web Services</span>
+          <span class="tech-tag">PDF Export</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Fase 3 -->
+    <div class="timeline-item">
+      <div class="timeline-dot dot-3"></div>
+      <div class="timeline-card">
+        <div class="timeline-header">
+          <span class="timeline-phase phase-tag-3">Fase 3</span>
+          <span class="timeline-name">Tesoreria + Proveedores + Conciliacion</span>
+          <span class="timeline-duration">3-5 semanas</span>
+        </div>
+        <div class="timeline-items">
+          <div class="timeline-item-text">Payments Service: Caja / Bancos / Movimientos</div>
+          <div class="timeline-item-text">Conciliacion bancaria automatica</div>
+          <div class="timeline-item-text">CRM Service: Proveedores, cuentas a pagar</div>
+          <div class="timeline-item-text">Evento payment.received → actualizacion contable</div>
+          <div class="timeline-item-text">Exportaciones PDF/Excel</div>
+        </div>
+        <div class="timeline-tech">
+          <span class="tech-tag">.NET 8</span>
+          <span class="tech-tag">NPOI / OpenXML</span>
+          <span class="tech-tag">AFIP</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Fase 4 -->
+    <div class="timeline-item">
+      <div class="timeline-dot dot-4"></div>
+      <div class="timeline-card">
+        <div class="timeline-header">
+          <span class="timeline-phase phase-tag-4">Fase 4</span>
+          <span class="timeline-name">IA + Dashboard Inteligente (Diferencial)</span>
+          <span class="timeline-duration">1-2 meses</span>
+        </div>
+        <div class="timeline-items">
+          <div class="timeline-item-text">Clasificacion automatica de gastos (IA)</div>
+          <div class="timeline-item-text">Prediccion de flujo de caja (Machine Learning)</div>
+          <div class="timeline-item-text">Alertas inteligentes: impuestos, pagos tardios, flujo negativo</div>
+          <div class="timeline-item-text">Recomendaciones automaticas de negocio</div>
+          <div class="timeline-item-text">Dashboard tipo Stripe/Notion</div>
+        </div>
+        <div class="timeline-tech">
+          <span class="tech-tag">Python ML</span>
+          <span class="tech-tag">OpenAI API</span>
+          <span class="tech-tag">WebSocket</span>
+          <span class="tech-tag">Real-time</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Fase 5 -->
+    <div class="timeline-item">
+      <div class="timeline-dot dot-5"></div>
+      <div class="timeline-card">
+        <div class="timeline-header">
+          <span class="timeline-phase phase-tag-5">Fase 5</span>
+          <span class="timeline-name">Escalabilidad + Produccion</span>
+          <span class="timeline-duration">1 mes</span>
+        </div>
+        <div class="timeline-items">
+          <div class="timeline-item-text">Migrar Event Bus in-process → Kafka (si hay volumen)</div>
+          <div class="timeline-item-text">Logging + Monitoring (Serilog + Grafana/Prometheus)</div>
+          <div class="timeline-item-text">Backups automaticos</div>
+          <div class="timeline-item-text">Auditoria completa (logs legales)</div>
+          <div class="timeline-item-text">Rate limiting avanzado</div>
+          <div class="timeline-item-text">Unit + Integration tests (validaciones contables)</div>
+        </div>
+        <div class="timeline-tech">
+          <span class="tech-tag">Kafka</span>
+          <span class="tech-tag">Grafana</span>
+          <span class="tech-tag">xUnit</span>
+          <span class="tech-tag">Serilog</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Fase 6 -->
+    <div class="timeline-item">
+      <div class="timeline-dot dot-6"></div>
+      <div class="timeline-card">
+        <div class="timeline-header">
+          <span class="timeline-phase phase-tag-6">Fase 6</span>
+          <span class="timeline-name">Go-to-Market</span>
+          <span class="timeline-duration">Continuo</span>
+        </div>
+        <div class="timeline-items">
+          <div class="timeline-item-text">Landing page + Onboarding</div>
+          <div class="timeline-item-text">Primeros 10 usuarios beta (niche elegido)</div>
+          <div class="timeline-item-text">Iterar basado en feedback</div>
+          <div class="timeline-item-text">Expandir a segundo nicho</div>
+          <div class="timeline-item-text">AFIP integration completa (factura electronica)</div>
+        </div>
+        <div class="timeline-tech">
+          <span class="tech-tag">Marketing</span>
+          <span class="tech-tag">SEO</span>
+          <span class="tech-tag">AFIP</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Milestone banner -->
+  <div class="milestone-banner">
+    <div class="milestone-title">Hitos Clave</div>
+    <div class="milestone-items">
+      <div class="milestone-item"><strong>Semana 4</strong> — MVP Contable</div>
+      <div class="milestone-item"><strong>Semana 8</strong> — Facturacion + Eventos</div>
+      <div class="milestone-item"><strong>Semana 14</strong> — Tesoreria Completa</div>
+      <div class="milestone-item"><strong>Mes 5</strong> — IA Integrada</div>
+      <div class="milestone-item"><strong>Mes 7</strong> — Production Ready</div>
+    </div>
+  </div>
+
+  <!-- Strategy note -->
+  <div class="strategy-note">
+    <strong>Estrategia:</strong> No empieces como ERP generico. Comenza como "Sistema contable + facturacion para freelancers/monotributistas" y escalá a ERP completo. 
+    Esto reduce riesgo, acelera time-to-market y te da un nicho fiel como primer usuario.
+  </div>
+</div>
+</body>
+</html>
