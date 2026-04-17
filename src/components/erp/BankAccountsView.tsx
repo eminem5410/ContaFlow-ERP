@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Plus, Pencil, Trash2, Landmark, Wallet, PiggyBank, Building2 } from 'lucide-react'
+import { Plus, Pencil, Trash2, Landmark, Wallet, PiggyBank, Building2, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -22,6 +22,7 @@ import { useAppStore } from '@/lib/store'
 import { api } from '@/lib/api'
 import { usePermission } from '@/hooks/use-permission'
 import { formatCurrency } from '@/lib/formatters'
+import { BankReconciliation } from './BankReconciliation'
 import { useTranslation } from '@/i18n'
 
 interface BankAccount {
@@ -62,6 +63,7 @@ export function BankAccountsView() {
   const [showDialog, setShowDialog] = useState(false)
   const [editingAccount, setEditingAccount] = useState<BankAccount | null>(null)
   const [deletingAccount, setDeletingAccount] = useState<BankAccount | null>(null)
+  const [reconcileAccount, setReconcileAccount] = useState<BankAccount | null>(null)
   const [form, setForm] = useState(emptyForm)
 
   const { data, isLoading } = useQuery<{ bankAccounts: BankAccount[] }>({
@@ -132,6 +134,8 @@ export function BankAccountsView() {
 
   return (
     <div className="space-y-6">
+      {/* Main content - hidden during reconciliation */}
+      {!reconcileAccount && (<>
       {/* Total Balance Card */}
       <Card className="bg-gradient-to-r from-slate-900 to-slate-800 border-slate-700">
         <CardContent className="p-6">
@@ -202,6 +206,9 @@ export function BankAccountsView() {
                       </div>
                     </div>
                     <div className="flex items-center gap-1 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-600 hover:text-blue-800 hover:bg-blue-50" onClick={function () { setReconcileAccount(account) }}>
+                        <RefreshCw className="h-3.5 w-3.5" />
+                      </Button>
                       {canEdit('bank-accounts') && (
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(account)}>
                           <Pencil className="h-3.5 w-3.5" />
@@ -288,6 +295,17 @@ export function BankAccountsView() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      </>)}
+
+      {/* Reconciliation View */}
+      {reconcileAccount && (
+        <BankReconciliation
+          bankAccountId={reconcileAccount.id}
+          bankAccountName={reconcileAccount.name + (reconcileAccount.bank ? ' - ' + reconcileAccount.bank : '')}
+          onBack={function () { setReconcileAccount(null) }}
+        />
+      )}
 
       <AlertDialog open={!!deletingAccount} onOpenChange={(open) => !open && setDeletingAccount(null)}>
         <AlertDialogContent>
