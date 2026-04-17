@@ -99,3 +99,4 @@ prompt
 agent-ctx/
 .zscripts/
 
+.github/workflows/
